@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 import type { TranscriptSegment, TranscriptResponse } from "@/lib/transcript";
+import {
+  DEFAULT_ASR_MODEL,
+  LOCAL_ASR_MODEL_ID,
+  getAsrModel,
+  isLocalAsrModel,
+  type AsrModelId,
+} from "@/lib/asr-models";
+import { LOCAL_ASR_PORT, getLocalAsrStatus, touchLocalAsrActivity } from "@/lib/local-asr-server";
 
 type DeepInfraWord = {
   word?: string;
@@ -189,24 +197,17 @@ function pickString(source: unknown, ...keys: string[]): string | null {
 }
 
 export async function POST(request: Request) {
-  const apiKey =
-    getEnv("DEEPINFRA_API_KEY") ??
-    getEnv("DEEPINFRA_TOKEN");
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "DeepInfra API key is not configured." },
-      { status: 500 },
-    );
-  }
-
   const baseUrl = getEnv("DEEPINFRA_API_BASE_URL");
   const formData = await request.formData();
-  const model =
-    getFormString(formData.get("model")) ??
-    getEnv("DEEPINFRA_WHISPER_MODEL") ??
-    "openai/whisper-large-v3-turbo";
-  const supportsChunkParams = model.toLowerCase().includes("whisper");
+  const modelFromForm = getFormString(formData.get("model"));
+  const modelFromConfig = getAsrModel(modelFromForm);
+
+  const envModelIdRaw = getEnv("DEEPINFRA_WHISPER_MODEL");
+  const envModel = envModelIdRaw ? getAsrModel(envModelIdRaw) : null;
+
+  const resolvedModelId: AsrModelId = (modelFromConfig ?? envModel ?? getAsrModel(DEFAULT_ASR_MODEL))?.id ?? DEFAULT_ASR_MODEL;
+  const isLocalModel = isLocalAsrModel(resolvedModelId);
+  const supportsChunkParams = !isLocalModel && resolvedModelId.toLowerCase().includes("whisper");
   const file = formData.get("file");
 
   if (!file || typeof file === "string") {
@@ -217,6 +218,69 @@ export async function POST(request: Request) {
   }
 
   const audioFile = file as File;
+
+  if (isLocalModel) {
+    const localStatus = getLocalAsrStatus();
+
+    if (localStatus.status !== "running") {
+      return NextResponse.json(
+        {
+          error:
+            "Server tự host chưa khởi động. Vui lòng bấm nút \"Khởi động server\" ở tab Tự host.",
+        },
+        { status: 503 },
+      );
+    }
+
+    try {
+      const localForm = new FormData();
+      localForm.append("file", audioFile, audioFile.name || "audio");
+
+      const endpoint = `http://127.0.0.1:${LOCAL_ASR_PORT}/transcribe-json`;
+      const response = await fetch(endpoint, {
+        method: "POST",
+        body: localForm,
+      });
+
+      if (!response.ok) {
+        const rawError = await response.text().catch(() => null);
+        const message =
+          rawError && rawError.trim().length
+            ? rawError
+            : "Server tự host trả về lỗi khi xử lý file.";
+
+        console.error("[api/transcribe] local-server-error", {
+          status: response.status,
+          statusText: response.statusText,
+          message,
+        });
+
+        return NextResponse.json({ error: message }, { status: 502 });
+      }
+
+      const data = (await response.json()) as TranscriptResponse;
+      touchLocalAsrActivity();
+
+      return NextResponse.json(data);
+    } catch (error: unknown) {
+      console.error("[api/transcribe] local-server-exception", error);
+      const message =
+        (error instanceof Error && error.message) ||
+        "Không thể gọi server tự host.";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  const apiKey =
+    getEnv("DEEPINFRA_API_KEY") ??
+    getEnv("DEEPINFRA_TOKEN");
+
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "DeepInfra API key is not configured." },
+      { status: 500 },
+    );
+  }
 
   const taskRaw =
     getFormString(formData.get("task")) ??
@@ -246,9 +310,11 @@ export async function POST(request: Request) {
     getFormString(formData.get("webhook")) ??
     getEnv("DEEPINFRA_WEBHOOK");
 
+  const deepInfraModel = resolvedModelId === LOCAL_ASR_MODEL_ID ? DEFAULT_ASR_MODEL : resolvedModelId;
+
   try {
     console.log("[api/transcribe] incoming", {
-      model,
+      model: deepInfraModel,
       task,
       chunkLevel,
       chunkLength,
@@ -287,7 +353,7 @@ export async function POST(request: Request) {
 
     const resolvedBaseUrl =
       baseUrl && /^https?:\/\//.test(baseUrl) ? baseUrl : "https://api.deepinfra.com/v1/inference";
-    const endpoint = `${resolvedBaseUrl.replace(/\/$/, "")}/${model}`;
+    const endpoint = `${resolvedBaseUrl.replace(/\/$/, "")}/${deepInfraModel}`;
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -346,7 +412,7 @@ export async function POST(request: Request) {
         },
       ];
       console.log("[api/transcribe] fallback-segments-from-text", {
-        model,
+        model: deepInfraModel,
         hasDuration: duration > 0,
         textLength: data.text.length,
       });
@@ -382,7 +448,7 @@ export async function POST(request: Request) {
     }));
 
     console.log("[api/transcribe] success", {
-      model,
+      model: deepInfraModel,
       chunkLevel,
       chunkLength,
       wordCount: wordCandidates.length,
