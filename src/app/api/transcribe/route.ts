@@ -75,6 +75,20 @@ type WordTimestamp = {
   end: number;
 };
 
+function tokenizeTextForTimestamps(text: string): string[] {
+  const normalized = text.trim().replace(/\s+/g, " ");
+  if (!normalized) return [];
+
+  const hasCjk = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(normalized);
+  const hasSpaces = /\s/.test(normalized);
+
+  if (hasCjk && !hasSpaces) {
+    return Array.from(normalized);
+  }
+
+  return normalized.split(" ").filter(Boolean);
+}
+
 function normalizeWords(words: DeepInfraWhisperResponse["words"]): WordTimestamp[] {
   if (!Array.isArray(words)) return [];
   return words
@@ -90,13 +104,44 @@ function normalizeWords(words: DeepInfraWhisperResponse["words"]): WordTimestamp
     .filter(Boolean) as WordTimestamp[];
 }
 
+function synthesizeWordTimestampsFromSegments(segments: DeepInfraSegment[]): WordTimestamp[] {
+  const words: WordTimestamp[] = [];
+
+  for (const segment of segments) {
+    const text = typeof segment?.text === "string" ? segment.text : "";
+    const tokens = tokenizeTextForTimestamps(text);
+    if (!tokens.length) continue;
+
+    const start = Number.isFinite(segment?.start ?? NaN) ? (segment?.start as number) : 0;
+    const endRaw = Number.isFinite(segment?.end ?? NaN) ? (segment?.end as number) : start;
+    const duration = Math.max(endRaw - start, 0);
+    const fallbackDuration = Math.max(tokens.length * 0.35, 0.35 * tokens.length);
+    const totalDuration = duration > 0 ? duration : fallbackDuration;
+    const perToken = totalDuration / tokens.length;
+
+    tokens.forEach((token, index) => {
+      const tokenStart = start + perToken * index;
+      const tokenEnd = tokenStart + perToken;
+      words.push({
+        text: token,
+        start: tokenStart,
+        end: tokenEnd,
+      });
+    });
+  }
+
+  return words;
+}
+
 function buildSegmentsFromWords(words: WordTimestamp[]): TranscriptSegment[] {
   if (!words.length) return [];
 
   const segments: TranscriptSegment[] = [];
   const punctuationBreak = /[.?!。！？…]/;
-  const maxWords = 14;
-  const maxDuration = 4.5;
+  const maxWordsEnv = parseNumber(getEnv("SRT_MAX_WORDS_PER_SEGMENT"));
+  const maxDurationEnv = parseNumber(getEnv("SRT_MAX_DURATION_PER_SEGMENT"));
+  const maxWords = Number.isFinite(maxWordsEnv ?? NaN) ? (maxWordsEnv as number) : 8;
+  const maxDuration = Number.isFinite(maxDurationEnv ?? NaN) ? (maxDurationEnv as number) : 3.0;
 
   let buffer: WordTimestamp[] = [];
 
@@ -274,20 +319,32 @@ export async function POST(request: Request) {
           ? data.output.words
           : [],
     );
-    const wordSegments = buildSegmentsFromWords(wordCandidates);
     const rawSegments = Array.isArray(data.segments)
       ? data.segments
       : Array.isArray(data.output?.segments)
         ? data.output?.segments
         : [];
+    console.log("[deepinfra]", {
+      model,
+      chunkLevel,
+      chunkLength,
+      wordCount: wordCandidates.length,
+      rawSegmentCount: rawSegments.length,
+    });
+    const syntheticWords =
+      wordCandidates.length > 0 ? [] : synthesizeWordTimestampsFromSegments(rawSegments);
+    const syntheticWordSegments = buildSegmentsFromWords(syntheticWords);
+    const wordSegments = buildSegmentsFromWords(wordCandidates);
 
     const baseSegments: TranscriptSegment[] = wordSegments.length
       ? wordSegments
-      : rawSegments.map((segment, index) => ({
-          id: typeof segment?.id === "number" ? segment.id : index,
-          start: Number.isFinite(segment?.start ?? NaN) ? (segment?.start as number) : 0,
-          end: Number.isFinite(segment?.end ?? NaN) ? (segment?.end as number) : 0,
-          text: typeof segment?.text === "string" ? segment.text : "",
+      : syntheticWordSegments.length
+        ? syntheticWordSegments
+        : rawSegments.map((segment, index) => ({
+            id: typeof segment?.id === "number" ? segment.id : index,
+            start: Number.isFinite(segment?.start ?? NaN) ? (segment?.start as number) : 0,
+            end: Number.isFinite(segment?.end ?? NaN) ? (segment?.end as number) : 0,
+            text: typeof segment?.text === "string" ? segment.text : "",
         }));
 
     const segments: TranscriptSegment[] = baseSegments.map((segment, index) => ({
