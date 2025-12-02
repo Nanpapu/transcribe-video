@@ -250,7 +250,7 @@ export default function HomePage() {
   };
 
   return (
-    <Box minH="100vh" bg="gray.50" color="gray.900" pb={20}>
+    <Box suppressHydrationWarning minH="100vh" bg="gray.50" color="gray.900" pb={20}>
       <AppHeader />
 
       <Container maxW="7xl" mt={10} px={6}>

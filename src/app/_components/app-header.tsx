@@ -37,14 +37,6 @@ export function AppHeader() {
               </Text>
             </Box>
           </HStack>
-          <HStack gap={4}>
-            <Button size="sm" variant="ghost" colorPalette="gray">
-              Hướng dẫn
-            </Button>
-            <Button size="sm" variant="surface" colorPalette="blue">
-              Dự án mới
-            </Button>
-          </HStack>
         </HStack>
       </Container>
     </Box>
