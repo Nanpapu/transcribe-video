@@ -158,15 +158,34 @@ export async function startLocalAsrServer(): Promise<LocalAsrStatusPayload> {
     },
   );
 
-  child.on("exit", () => {
+  child.on("exit", (code, signal) => {
+    const previousStatus = status;
     child = null;
-    status = "idle";
     lastActive = null;
     expiresAt = null;
     if (idleTimer) {
       clearTimeout(idleTimer);
       idleTimer = null;
     }
+
+    if (previousStatus === "starting" || previousStatus === "running") {
+      const reason =
+        code !== null
+          ? `code ${code}`
+          : signal
+            ? `signal ${signal}`
+            : "unknown";
+      const message =
+        lastError ??
+        `Server Python đã dừng bất ngờ (${reason}). Kiểm tra LOCAL_ASR_PYTHON_CMD và các thư viện fastapi, uvicorn, transformers, torch, srt.`;
+      lastError = message;
+      status = "error";
+      // eslint-disable-next-line no-console
+      console.error("[local-asr] python-exit", { code, signal, previousStatus });
+    } else {
+      status = "idle";
+    }
+
     emitStatus();
   });
 
