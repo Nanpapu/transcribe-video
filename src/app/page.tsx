@@ -307,6 +307,26 @@ export default function HomePage() {
     );
   };
 
+  const handleViewModeChange = (nextShowOriginal: boolean) => {
+    setShowOriginal(nextShowOriginal);
+    setSegments((prev) =>
+      prev.map((segment) => {
+        const originalText = segment.originalText ?? segment.text;
+        const translatedText =
+          typeof segment.translatedText === "string" && segment.translatedText.length > 0
+            ? segment.translatedText
+            : segment.text;
+
+        return {
+          ...segment,
+          originalText,
+          translatedText,
+          text: nextShowOriginal ? originalText : translatedText,
+        };
+      }),
+    );
+  };
+
   const handleDownloadSrt = () => {
     if (!segments.length) return;
     const srtContent = segmentsToSrt(segments);
@@ -459,7 +479,7 @@ export default function HomePage() {
                     isTranslating={isTranslating}
                     showOriginal={showOriginal}
                     hasTranslation={hasTranslation}
-                    onViewModeChange={setShowOriginal}
+                    onViewModeChange={handleViewModeChange}
                     onTranslateClick={() => {
                       void handleTranslateSegments();
                     }}
