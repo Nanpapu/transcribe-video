@@ -1,7 +1,7 @@
 "use client";
 
 import { type ChangeEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Box, Container, Grid, Stack } from "@chakra-ui/react";
+import { Box, Container, Grid, Stack, Tabs } from "@chakra-ui/react";
 
 import {
   formatTimecode,
@@ -16,6 +16,7 @@ import { AppHeader } from "./_components/app-header";
 import { FileUploadCard } from "./_components/file-upload-card";
 import { VideoPreviewCard } from "./_components/video-preview-card";
 import { SubtitleEditorCard } from "./_components/subtitle-editor-card";
+import { BatchTranscribeCard } from "./_components/batch-transcribe-card";
 
 type EditableSegment = EditableTranscriptSegment;
 
@@ -277,57 +278,93 @@ export default function HomePage() {
       <AppHeader />
 
       <Container maxW="7xl" mt={10} px={6}>
-        <Grid templateColumns={{ base: "1fr", lg: "1fr 1.2fr" }} gap={10} alignItems="start">
-          {/* Left Column: Upload & Preview */}
-          <Stack gap={8}>
-            <FileUploadCard
-              file={file}
-              isTranscribing={isTranscribing}
-              inputRef={inputRef}
-              model={model}
-              onModelChange={setModel}
-              language={language}
-              onLanguageChange={setLanguage}
-              onFileChange={handleFileChange}
-              onClearFile={handleClearFile}
-              onTranscribe={handleTranscribe}
-              fileDurationSeconds={fileDuration}
-              actualCostUsd={actualCostUsd}
-            />
-
-            <VideoPreviewCard
-              videoUrl={videoUrl}
-              videoRef={videoRef}
-              subtitlePosition={subtitlePosition}
-              onSubtitlePositionChange={setSubtitlePosition}
-              onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={handleLoadedMetadata}
-              currentSegmentText={currentSegment?.text ?? null}
-              currentTime={currentTime}
-              totalSegments={segments.length}
-              activeIndex={activeIndex}
-            />
-          </Stack>
-
-          {/* Right Column: Editor */}
-          <Stack
+        <Tabs.Root defaultValue="single" colorPalette="blue">
+          <Tabs.List
+            mb={6}
+            borderBottomWidth="1px"
+            borderColor="gray.200"
             gap={6}
-            alignSelf="start"
-            position={{ base: "static", lg: "sticky" }}
-            top={{ base: "0px", lg: "96px" }}
           >
-            <SubtitleEditorCard
-              segments={segments}
-              error={error}
-              activeIndex={activeIndex}
-              onDownloadSrt={handleDownloadSrt}
-              onTimeChange={handleTimeChange}
-              onTimeBlur={handleTimeBlur}
-              onTextChange={handleTextChange}
-              onSeekToSegment={handleSeekToSegment}
-            />
-          </Stack>
-        </Grid>
+            <Tabs.Trigger
+              value="single"
+              px={3}
+              py={2}
+              fontSize="sm"
+              fontWeight="medium"
+            >
+              Transcribe đơn lẻ
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              value="batch"
+              px={3}
+              py={2}
+              fontSize="sm"
+              fontWeight="medium"
+            >
+              Transcribe nhiều file
+            </Tabs.Trigger>
+          </Tabs.List>
+
+          <Tabs.Content value="single">
+            <Grid
+              templateColumns={{ base: "1fr", lg: "1fr 1.2fr" }}
+              gap={10}
+              alignItems="start"
+            >
+              <Stack gap={8}>
+                <FileUploadCard
+                  file={file}
+                  isTranscribing={isTranscribing}
+                  inputRef={inputRef}
+                  model={model}
+                  onModelChange={setModel}
+                  language={language}
+                  onLanguageChange={setLanguage}
+                  onFileChange={handleFileChange}
+                  onClearFile={handleClearFile}
+                  onTranscribe={handleTranscribe}
+                  fileDurationSeconds={fileDuration}
+                  actualCostUsd={actualCostUsd}
+                />
+
+                <VideoPreviewCard
+                  videoUrl={videoUrl}
+                  videoRef={videoRef}
+                  subtitlePosition={subtitlePosition}
+                  onSubtitlePositionChange={setSubtitlePosition}
+                  onTimeUpdate={handleTimeUpdate}
+                  onLoadedMetadata={handleLoadedMetadata}
+                  currentSegmentText={currentSegment?.text ?? null}
+                  currentTime={currentTime}
+                  totalSegments={segments.length}
+                  activeIndex={activeIndex}
+                />
+              </Stack>
+
+              <Stack
+                gap={6}
+                alignSelf="start"
+                position={{ base: "static", lg: "sticky" }}
+                top={{ base: "0px", lg: "96px" }}
+              >
+                <SubtitleEditorCard
+                  segments={segments}
+                  error={error}
+                  activeIndex={activeIndex}
+                  onDownloadSrt={handleDownloadSrt}
+                  onTimeChange={handleTimeChange}
+                  onTimeBlur={handleTimeBlur}
+                  onTextChange={handleTextChange}
+                  onSeekToSegment={handleSeekToSegment}
+                />
+              </Stack>
+            </Grid>
+          </Tabs.Content>
+
+          <Tabs.Content value="batch">
+            <BatchTranscribeCard />
+          </Tabs.Content>
+        </Tabs.Root>
       </Container>
     </Box>
   );
