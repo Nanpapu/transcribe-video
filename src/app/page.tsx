@@ -232,9 +232,17 @@ export default function HomePage() {
     const srtContent = segmentsToSrt(segments);
     const blob = new Blob([srtContent], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
+
+    const baseName = (() => {
+      if (!file?.name) return "subtitles";
+      const dotIndex = file.name.lastIndexOf(".");
+      if (dotIndex <= 0) return file.name;
+      return file.name.slice(0, dotIndex);
+    })();
+
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "subtitles.srt";
+    anchor.download = `${baseName}.srt`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
