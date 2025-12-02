@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { AutomaticSpeechRecognition } from "deepinfra";
+import type { AutomaticSpeechRecognitionRequest } from "deepinfra/dist/lib/types/automatic-speech-recognition/request";
 
 type TranscriptSegment = {
   id: number;
@@ -12,21 +14,25 @@ type TranscriptResponse = {
   segments: TranscriptSegment[];
 };
 
+type DeepInfraWord = {
+  word?: string;
+  text?: string;
+  start?: number;
+  end?: number;
+};
+
 type DeepInfraSegment = {
-  id: number;
-  start: number;
-  end: number;
-  text: string;
+  id?: number;
+  start?: number;
+  end?: number;
+  text?: string;
+  words?: DeepInfraWord[];
 };
 
 type DeepInfraWhisperResponse = {
   text?: string;
   segments?: DeepInfraSegment[];
-  words?: {
-    word?: string;
-    start?: number;
-    end?: number;
-  }[];
+  words?: DeepInfraWord[];
   language?: string;
   duration?: number;
   request_id?: string;
@@ -36,13 +42,6 @@ type DeepInfraWhisperResponse = {
     cost?: number;
     tokens_generated?: number;
     tokens_input?: number;
-  };
-  output?: {
-    text?: string;
-    segments?: DeepInfraSegment[];
-    words?: DeepInfraWhisperResponse["words"];
-    language?: string;
-    duration?: number;
   };
 };
 
@@ -89,11 +88,17 @@ function tokenizeTextForTimestamps(text: string): string[] {
   return normalized.split(" ").filter(Boolean);
 }
 
-function normalizeWords(words: DeepInfraWhisperResponse["words"]): WordTimestamp[] {
+function normalizeWords(words: DeepInfraWord[] | null | undefined): WordTimestamp[] {
   if (!Array.isArray(words)) return [];
   return words
     .map((entry) => {
-      const text = typeof entry?.word === "string" ? entry.word.trim() : "";
+      const rawText =
+        typeof entry?.word === "string"
+          ? entry.word
+          : typeof entry?.text === "string"
+            ? entry.text
+            : "";
+      const text = rawText.trim();
       const start = typeof entry?.start === "number" ? entry.start : null;
       const end = typeof entry?.end === "number" ? entry.end : null;
       if (!text || start === null || end === null || Number.isNaN(start) || Number.isNaN(end)) {
@@ -208,9 +213,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const baseUrl =
-    getEnv("DEEPINFRA_API_BASE_URL") ??
-    "https://api.deepinfra.com/v1/inference";
+  const baseUrl = getEnv("DEEPINFRA_API_BASE_URL");
   const formData = await request.formData();
   const model =
     getFormString(formData.get("model")) ??
@@ -255,82 +258,49 @@ export async function POST(request: Request) {
     getFormString(formData.get("webhook")) ??
     getEnv("DEEPINFRA_WEBHOOK");
 
-  const deepInfraForm = new FormData();
-  deepInfraForm.append("audio", audioFile, audioFile.name || "audio");
-  deepInfraForm.append("task", task);
-  deepInfraForm.append("chunk_level", chunkLevel);
-
-  if (language) {
-    deepInfraForm.append("language", language);
-  }
-  if (initialPrompt) {
-    deepInfraForm.append("initial_prompt", initialPrompt);
-  }
-  if (Number.isFinite(temperature ?? NaN)) {
-    deepInfraForm.append("temperature", `${temperature}`);
-  }
-  if (Number.isFinite(chunkLength ?? NaN)) {
-    const safeLength = Math.min(30, Math.max(1, Math.round(chunkLength ?? 0)));
-    deepInfraForm.append("chunk_length_s", `${safeLength}`);
-  }
-  if (webhook) {
-    deepInfraForm.append("webhook", webhook);
-  }
-
-  const endpoint = `${baseUrl.replace(/\/$/, "")}/${model}`;
-
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `bearer ${apiKey}`,
-      },
-      body: deepInfraForm,
-    });
+    const audioBuffer = Buffer.from(await audioFile.arrayBuffer());
 
-    if (!response.ok) {
-      const rawError = await response.text().catch(() => null);
-      let parsedError: unknown = null;
+    type ExtendedAsrRequest = AutomaticSpeechRecognitionRequest & {
+      chunk_level?: "segment" | "word";
+      chunk_length_s?: number;
+    };
 
-      if (rawError) {
-        try {
-          parsedError = JSON.parse(rawError);
-        } catch {
-          parsedError = null;
-        }
-      }
+    const safeChunkLength = Number.isFinite(chunkLength ?? NaN)
+      ? Math.min(30, Math.max(1, Math.round(chunkLength ?? 0)))
+      : null;
 
-      const message =
-        pickString(parsedError, "error", "detail", "message") ??
-        (rawError && rawError.trim() ? rawError : null) ??
-        "Failed to call DeepInfra Whisper API.";
+    const requestBody: ExtendedAsrRequest = {
+      audio: audioBuffer,
+      task,
+    };
 
-      return NextResponse.json(
-        { error: message || "Failed to call DeepInfra Whisper API." },
-        { status: 502 },
-      );
+    if (language) requestBody.language = language;
+    if (Number.isFinite(temperature ?? NaN) && typeof temperature === "number") {
+      requestBody.temperature = temperature;
+    }
+    if (initialPrompt) requestBody.initial_prompt = initialPrompt;
+    if (webhook) requestBody.webhook = webhook;
+    requestBody.chunk_level = chunkLevel;
+    if (safeChunkLength !== null) {
+      requestBody.chunk_length_s = safeChunkLength;
     }
 
-    const data = (await response.json()) as DeepInfraWhisperResponse;
-    const wordCandidates = normalizeWords(
-      Array.isArray(data.words)
-        ? data.words
-        : Array.isArray(data.output?.words)
-          ? data.output.words
-          : [],
+    const endpointModel =
+      baseUrl && /^https?:\/\//.test(baseUrl)
+        ? `${baseUrl.replace(/\/$/, "")}/${model}`
+        : model;
+    const client = new AutomaticSpeechRecognition(endpointModel, apiKey);
+    const data = (await client.generate(requestBody)) as DeepInfraWhisperResponse;
+
+    const segmentsFromResponse = Array.isArray(data.segments) ? data.segments : [];
+    const wordsFromSegments: DeepInfraWord[] = segmentsFromResponse.flatMap((segment) =>
+      Array.isArray(segment.words) ? segment.words : [],
     );
-    const rawSegments = Array.isArray(data.segments)
-      ? data.segments
-      : Array.isArray(data.output?.segments)
-        ? data.output?.segments
-        : [];
-    console.log("[deepinfra]", {
-      model,
-      chunkLevel,
-      chunkLength,
-      wordCount: wordCandidates.length,
-      rawSegmentCount: rawSegments.length,
-    });
+    const wordCandidates = normalizeWords(
+      Array.isArray(data.words) && data.words.length ? data.words : wordsFromSegments,
+    );
+    const rawSegments = segmentsFromResponse;
     const syntheticWords =
       wordCandidates.length > 0 ? [] : synthesizeWordTimestampsFromSegments(rawSegments);
     const syntheticWordSegments = buildSegmentsFromWords(syntheticWords);
@@ -355,21 +325,19 @@ export async function POST(request: Request) {
     }));
 
     const payload: TranscriptResponse = {
-      text:
-        typeof data.text === "string"
-          ? data.text
-          : typeof data.output?.text === "string"
-            ? data.output.text
-            : "",
+      text: typeof data.text === "string" ? data.text : "",
       segments,
     };
 
     return NextResponse.json(payload);
-  } catch {
+  } catch (error: unknown) {
+    const message =
+      pickString(error, "message") ??
+      (error instanceof Error && error.message ? error.message : null) ??
+      "Unexpected error while calling DeepInfra Whisper API.";
     return NextResponse.json(
       {
-        error:
-          "Unexpected error while calling DeepInfra Whisper API.",
+        error: message,
       },
       { status: 500 },
     );
