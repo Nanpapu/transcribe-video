@@ -211,11 +211,11 @@ export async function POST(request: Request) {
   const baseUrl =
     getEnv("DEEPINFRA_API_BASE_URL") ??
     "https://api.deepinfra.com/v1/inference";
+  const formData = await request.formData();
   const model =
+    getFormString(formData.get("model")) ??
     getEnv("DEEPINFRA_WHISPER_MODEL") ??
     "openai/whisper-large-v3-turbo";
-
-  const formData = await request.formData();
   const file = formData.get("file");
 
   if (!file || typeof file === "string") {

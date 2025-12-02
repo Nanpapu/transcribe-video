@@ -66,6 +66,8 @@ type TranscriptResponse = {
 
 type SubtitlePosition = "bottom" | "middle" | "top";
 
+type AsrModelId = "openai/whisper-large-v3-turbo" | "mistralai/Voxtral-Small-24B-2507";
+
 function formatTimecode(totalSeconds: number): string {
   if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
     return "00:00:00,000";
@@ -135,6 +137,7 @@ export default function HomePage() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subtitlePosition, setSubtitlePosition] = useState<SubtitlePosition>("bottom");
+  const [model, setModel] = useState<AsrModelId>("openai/whisper-large-v3-turbo");
   const [currentTime, setCurrentTime] = useState(0);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
@@ -192,6 +195,7 @@ export default function HomePage() {
     try {
       const body = new FormData();
       body.append("file", file);
+      body.append("model", model);
 
       const response = await fetch("/api/transcribe", {
         method: "POST",
@@ -439,6 +443,35 @@ export default function HomePage() {
                   display="none"
                   onChange={handleFileChange}
                 />
+                <Box mt={6}>
+                  <Field.Root orientation="horizontal" w="full" gap={4}>
+                    <Field.Label
+                      htmlFor="asr-model"
+                      fontSize="sm"
+                      color="gray.700"
+                      fontWeight="medium"
+                    >
+                      Model nhận dạng
+                    </Field.Label>
+                    <NativeSelect.Root size="sm" variant="outline" width="260px">
+                      <NativeSelect.Field
+                        id="asr-model"
+                        value={model}
+                        onChange={(event) =>
+                          setModel(event.target.value as AsrModelId)
+                        }
+                      >
+                        <option value="openai/whisper-large-v3-turbo">
+                          Whisper Large V3 Turbo (OpenAI)
+                        </option>
+                        <option value="mistralai/Voxtral-Small-24B-2507">
+                          Voxtral Small 24B 2507 (Mistral)
+                        </option>
+                      </NativeSelect.Field>
+                      <NativeSelect.Indicator />
+                    </NativeSelect.Root>
+                  </Field.Root>
+                </Box>
               </Card.Body>
               {file && (
                 <Card.Footer pt={0} pb={6} px={6}>
