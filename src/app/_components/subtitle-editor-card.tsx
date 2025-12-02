@@ -69,7 +69,7 @@ export function SubtitleEditorCard({
       variant="elevated"
       shadow="md"
       borderRadius="xl"
-      h="calc(100vh - 120px)"
+      maxH={{ base: "none", lg: "calc(100vh - 120px)" }}
       display="flex"
       flexDirection="column"
       overflow="hidden"
@@ -147,18 +147,60 @@ export function SubtitleEditorCard({
             overflowY="auto"
             flex="1"
             className="custom-scrollbar"
+            position="relative"
           >
-            <Table.Root size="sm" stickyHeader interactive>
+            <Table.Root
+              size="sm"
+              style={{ borderCollapse: "separate", borderSpacing: 0 }}
+            >
               <Table.Header>
-                <Table.Row bg="gray.50">
-                  <Table.ColumnHeader w="60px" textAlign="center" py={3}>
+                <Table.Row bg="gray.50" borderBottomWidth="0">
+                  <Table.ColumnHeader
+                    w="60px"
+                    textAlign="center"
+                    py={3}
+                    position="sticky"
+                    top={0}
+                    zIndex={10}
+                    bg="gray.50"
+                    borderBottomWidth="1px"
+                    borderColor="gray.200"
+                  >
                     #
                   </Table.ColumnHeader>
-                  <Table.ColumnHeader w="140px" py={3}>
+                  <Table.ColumnHeader
+                    w="140px"
+                    py={3}
+                    position="sticky"
+                    top={0}
+                    zIndex={10}
+                    bg="gray.50"
+                    borderBottomWidth="1px"
+                    borderColor="gray.200"
+                  >
                     Thời gian
                   </Table.ColumnHeader>
-                  <Table.ColumnHeader py={3}>Nội dung</Table.ColumnHeader>
-                  <Table.ColumnHeader w="50px" py={3} />
+                  <Table.ColumnHeader
+                    py={3}
+                    position="sticky"
+                    top={0}
+                    zIndex={10}
+                    bg="gray.50"
+                    borderBottomWidth="1px"
+                    borderColor="gray.200"
+                  >
+                    Nội dung
+                  </Table.ColumnHeader>
+                  <Table.ColumnHeader
+                    w="50px"
+                    py={3}
+                    position="sticky"
+                    top={0}
+                    zIndex={10}
+                    bg="gray.50"
+                    borderBottomWidth="1px"
+                    borderColor="gray.200"
+                  />
                 </Table.Row>
               </Table.Header>
               <Table.Body>
@@ -172,8 +214,6 @@ export function SubtitleEditorCard({
                       }}
                       bg={isActive ? "blue.50" : undefined}
                       _hover={{ bg: isActive ? "blue.100" : "gray.50" }}
-                      borderLeftWidth={isActive ? "3px" : "1px"}
-                      borderLeftColor={isActive ? "blue.500" : "transparent"}
                       transition="background 0.1s"
                     >
                       <Table.Cell
@@ -181,10 +221,14 @@ export function SubtitleEditorCard({
                         color="gray.500"
                         fontSize="xs"
                         fontWeight="medium"
+                        borderLeftWidth={isActive ? "3px" : "1px"}
+                        borderLeftColor={isActive ? "blue.500" : "transparent"}
+                        borderBottomWidth="1px"
+                        borderColor="gray.100"
                       >
                         {index + 1}
                       </Table.Cell>
-                      <Table.Cell>
+                      <Table.Cell borderBottomWidth="1px" borderColor="gray.100">
                         <VStack gap={1.5} align="start">
                           <Input
                             size="xs"
@@ -220,7 +264,11 @@ export function SubtitleEditorCard({
                           />
                         </VStack>
                       </Table.Cell>
-                      <Table.Cell py={3}>
+                      <Table.Cell
+                        py={3}
+                        borderBottomWidth="1px"
+                        borderColor="gray.100"
+                      >
                         <Textarea
                           size="sm"
                           variant="outline"
@@ -238,7 +286,7 @@ export function SubtitleEditorCard({
                           borderRadius="md"
                         />
                       </Table.Cell>
-                      <Table.Cell>
+                      <Table.Cell borderBottomWidth="1px" borderColor="gray.100">
                         <Button
                           size="xs"
                           variant="ghost"
