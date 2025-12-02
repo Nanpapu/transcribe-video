@@ -1,6 +1,6 @@
 "use client";
 
-import { type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Container, Grid, Stack } from "@chakra-ui/react";
 
 import {

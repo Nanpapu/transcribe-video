@@ -14,7 +14,7 @@ import { formatTimecode, type SubtitlePosition } from "@/lib/transcript";
 
 type VideoPreviewCardProps = {
   videoUrl: string | null;
-  videoRef: RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   subtitlePosition: SubtitlePosition;
   onSubtitlePositionChange: (position: SubtitlePosition) => void;
   onTimeUpdate: (event: SyntheticEvent<HTMLVideoElement>) => void;
@@ -158,4 +158,3 @@ export function VideoPreviewCard({
     </Card.Root>
   );
 }
-

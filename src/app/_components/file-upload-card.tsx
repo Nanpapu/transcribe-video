@@ -19,7 +19,7 @@ import { ASR_MODELS, type AsrModelId } from "@/lib/asr-models";
 type FileUploadCardProps = {
   file: File | null;
   isTranscribing: boolean;
-  inputRef: RefObject<HTMLInputElement>;
+  inputRef: RefObject<HTMLInputElement | null>;
   model: AsrModelId;
   onModelChange: (value: AsrModelId) => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -189,4 +189,3 @@ export function FileUploadCard({
     </Card.Root>
   );
 }
-
