@@ -210,6 +210,17 @@ export default function HomePage() {
         endTimecode: formatTimecode(segment.end),
       }));
 
+      if (!mappedSegments.length) {
+        setSegments([]);
+        setActiveIndex(null);
+        setCurrentTime(0);
+        if (videoRef.current) videoRef.current.currentTime = 0;
+        setError(
+          "API không trả về timestamp theo đoạn. Kiểm tra cấu hình DeepInfra (chunk_level=segment, chunk_length_s).",
+        );
+        return;
+      }
+
       setSegments(mappedSegments);
       setActiveIndex(null);
       setCurrentTime(0);
@@ -479,13 +490,16 @@ export default function HomePage() {
                 {videoUrl ? (
                   <Box position="relative">
                     <chakra.video
+                      key={videoUrl ?? "video-player"}
                       ref={videoRef}
                       src={videoUrl ?? undefined}
                       controls
+                      playsInline
                       w="100%"
-                      h="auto"
                       maxH="400px"
                       display="block"
+                      bg="black"
+                      objectFit="contain"
                       onTimeUpdate={handleTimeUpdate}
                     />
                     {currentSegment && (

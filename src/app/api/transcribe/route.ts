@@ -22,11 +22,51 @@ type DeepInfraSegment = {
 type DeepInfraWhisperResponse = {
   text?: string;
   segments?: DeepInfraSegment[];
+  words?: {
+    word?: string;
+    start?: number;
+    end?: number;
+  }[];
+  language?: string;
+  duration?: number;
+  request_id?: string;
+  inference_status?: {
+    status?: string;
+    runtime_ms?: number;
+    cost?: number;
+    tokens_generated?: number;
+    tokens_input?: number;
+  };
+  output?: {
+    text?: string;
+    segments?: DeepInfraSegment[];
+    words?: DeepInfraWhisperResponse["words"];
+    language?: string;
+    duration?: number;
+  };
 };
 
 function getEnv(key: string): string | null {
   const value = process.env[key];
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function getFormString(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function parseNumber(value: FormDataEntryValue | string | null): number | null {
+  const raw =
+    typeof value === "string"
+      ? value.trim()
+      : typeof value === "number"
+        ? value.toString()
+        : getFormString(value ?? null);
+  if (!raw) return null;
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export async function POST(request: Request) {
@@ -60,8 +100,55 @@ export async function POST(request: Request) {
 
   const audioFile = file as File;
 
+  const taskRaw =
+    getFormString(formData.get("task")) ??
+    getEnv("DEEPINFRA_TASK") ??
+    "transcribe";
+  const task = taskRaw === "translate" ? "translate" : "transcribe";
+
+  const chunkLevelRaw =
+    getFormString(formData.get("chunk_level")) ??
+    getEnv("DEEPINFRA_CHUNK_LEVEL") ??
+    "segment";
+  const chunkLevel = chunkLevelRaw === "word" ? "word" : "segment";
+
+  const language =
+    getFormString(formData.get("language")) ??
+    getEnv("DEEPINFRA_LANGUAGE");
+  const initialPrompt =
+    getFormString(formData.get("initial_prompt")) ??
+    getEnv("DEEPINFRA_INITIAL_PROMPT");
+  const temperature =
+    parseNumber(formData.get("temperature")) ??
+    parseNumber(getEnv("DEEPINFRA_TEMPERATURE"));
+  const chunkLength =
+    parseNumber(formData.get("chunk_length_s")) ??
+    parseNumber(getEnv("DEEPINFRA_CHUNK_LENGTH_S"));
+  const webhook =
+    getFormString(formData.get("webhook")) ??
+    getEnv("DEEPINFRA_WEBHOOK");
+
   const deepInfraForm = new FormData();
   deepInfraForm.append("audio", audioFile, audioFile.name || "audio");
+  deepInfraForm.append("task", task);
+  deepInfraForm.append("chunk_level", chunkLevel);
+
+  if (language) {
+    deepInfraForm.append("language", language);
+  }
+  if (initialPrompt) {
+    deepInfraForm.append("initial_prompt", initialPrompt);
+  }
+  if (Number.isFinite(temperature ?? NaN)) {
+    deepInfraForm.append("temperature", `${temperature}`);
+  }
+  if (Number.isFinite(chunkLength ?? NaN)) {
+    const safeLength = Math.min(30, Math.max(1, Math.round(chunkLength ?? 0)));
+    deepInfraForm.append("chunk_length_s", `${safeLength}`);
+  }
+  if (webhook) {
+    deepInfraForm.append("webhook", webhook);
+  }
 
   const endpoint = `${baseUrl.replace(/\/$/, "")}/${model}`;
 
@@ -75,9 +162,23 @@ export async function POST(request: Request) {
     });
 
     if (!response.ok) {
-      const message = await response
-        .text()
-        .catch(() => "Failed to call DeepInfra Whisper API.");
+      const rawError = await response.text().catch(() => null);
+      let parsedError: any = null;
+
+      if (rawError) {
+        try {
+          parsedError = JSON.parse(rawError);
+        } catch {
+          parsedError = null;
+        }
+      }
+
+      const message =
+        (parsedError?.error as string | undefined) ??
+        (parsedError?.detail as string | undefined) ??
+        (parsedError?.message as string | undefined) ??
+        rawError ??
+        "Failed to call DeepInfra Whisper API.";
 
       return NextResponse.json(
         { error: message || "Failed to call DeepInfra Whisper API." },
@@ -88,7 +189,9 @@ export async function POST(request: Request) {
     const data = (await response.json()) as DeepInfraWhisperResponse;
     const rawSegments = Array.isArray(data.segments)
       ? data.segments
-      : [];
+      : Array.isArray(data.output?.segments)
+        ? data.output?.segments
+        : [];
 
     const segments: TranscriptSegment[] = rawSegments.map(
       (segment, index) => ({
@@ -103,7 +206,12 @@ export async function POST(request: Request) {
     );
 
     const payload: TranscriptResponse = {
-      text: typeof data.text === "string" ? data.text : "",
+      text:
+        typeof data.text === "string"
+          ? data.text
+          : typeof data.output?.text === "string"
+            ? data.output.text
+            : "",
       segments,
     };
 
@@ -118,4 +226,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
