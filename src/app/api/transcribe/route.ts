@@ -294,9 +294,10 @@ export async function POST(request: Request) {
     "segment";
   const chunkLevel = chunkLevelRaw === "word" ? "word" : "segment";
 
-  const language =
+  const languageRaw =
     getFormString(formData.get("language")) ??
     getEnv("DEEPINFRA_LANGUAGE");
+  const language = languageRaw && languageRaw !== "auto" ? languageRaw : null;
   const initialPrompt =
     getFormString(formData.get("initial_prompt")) ??
     getEnv("DEEPINFRA_INITIAL_PROMPT");

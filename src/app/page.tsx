@@ -19,6 +19,8 @@ import { SubtitleEditorCard } from "./_components/subtitle-editor-card";
 
 type EditableSegment = EditableTranscriptSegment;
 
+type AsrLanguage = "auto" | "zh" | "ko" | "en" | "ja" | "vi";
+
 // --- Main Component ---
 
 export default function HomePage() {
@@ -29,6 +31,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [subtitlePosition, setSubtitlePosition] = useState<SubtitlePosition>("bottom");
   const [model, setModel] = useState<AsrModelId>(DEFAULT_ASR_MODEL);
+  const [language, setLanguage] = useState<AsrLanguage>("auto");
   const [fileDuration, setFileDuration] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -107,6 +110,9 @@ export default function HomePage() {
       const body = new FormData();
       body.append("file", file);
       body.append("model", model);
+      if (language && language !== "auto") {
+        body.append("language", language);
+      }
 
       const response = await fetch("/api/transcribe", {
         method: "POST",
@@ -263,6 +269,8 @@ export default function HomePage() {
               inputRef={inputRef}
               model={model}
               onModelChange={setModel}
+              language={language}
+              onLanguageChange={setLanguage}
               onFileChange={handleFileChange}
               onClearFile={handleClearFile}
               onTranscribe={handleTranscribe}

@@ -31,6 +31,8 @@ type FileUploadCardProps = {
   inputRef: RefObject<HTMLInputElement | null>;
   model: AsrModelId;
   onModelChange: (value: AsrModelId) => void;
+  language: "auto" | "zh" | "ko" | "en" | "ja" | "vi";
+  onLanguageChange: (value: "auto" | "zh" | "ko" | "en" | "ja" | "vi") => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onClearFile: () => void;
   onTranscribe: () => void;
@@ -43,6 +45,8 @@ export function FileUploadCard({
   inputRef,
   model,
   onModelChange,
+  language,
+  onLanguageChange,
   onFileChange,
   onClearFile,
   onTranscribe,
@@ -208,6 +212,30 @@ export function FileUploadCard({
                     {item.label}
                   </option>
                 ))}
+              </NativeSelect.Field>
+              <NativeSelect.Indicator />
+            </NativeSelect.Root>
+          </Field.Root>
+          <Field.Root orientation="horizontal" w="full" gap={4} mt={4}>
+            <Field.Label htmlFor="asr-language-select" fontSize="sm" color="gray.700" fontWeight="medium">
+              Ngôn ngữ
+            </Field.Label>
+            <NativeSelect.Root size="sm" variant="outline" width="260px">
+              <NativeSelect.Field
+                id="asr-language-select"
+                value={language}
+                onChange={(event) =>
+                  onLanguageChange(
+                    event.target.value as "auto" | "zh" | "ko" | "en" | "ja" | "vi",
+                  )
+                }
+              >
+                <option value="auto">Tự động (Auto)</option>
+                <option value="vi">Tiếng Việt</option>
+                <option value="en">Tiếng Anh</option>
+                <option value="zh">Tiếng Trung</option>
+                <option value="ko">Tiếng Hàn</option>
+                <option value="ja">Tiếng Nhật</option>
               </NativeSelect.Field>
               <NativeSelect.Indicator />
             </NativeSelect.Root>
