@@ -149,117 +149,127 @@ export function BatchTranscribeCard() {
 
   const handleStart = () => {
     if (isRunning) return;
-    const hasPending = jobs.some((job) => job.status === "pending");
-    if (!hasPending) return;
+    const pendingIndexes = jobs
+      .map((job, index) => (job.status === "pending" ? index : -1))
+      .filter((index) => index >= 0);
+    if (!pendingIndexes.length) return;
 
     setIsRunning(true);
 
-    const run = async () => {
-      for (let index = 0; index < jobs.length; index += 1) {
-        if (!isMountedRef.current) {
-          return;
-        }
+    const snapshotJobs = jobs;
+    const modelSnapshot = model;
+    const languageSnapshot = language;
 
-        const job = jobs[index];
+    const runAll = async () => {
+      const tasks = pendingIndexes.map((jobIndex, order) => {
+        const job = snapshotJobs[jobIndex];
         if (!job || job.status !== "pending") {
-          continue;
+          return Promise.resolve();
         }
 
-        setJobs((prev) =>
-          prev.map((item, idx) =>
-            idx === index ? { ...item, status: "processing", errorMessage: null } : item,
-          ),
-        );
-
-        try {
-          const formData = new FormData();
-          formData.append("file", job.file);
-          formData.append("model", model);
-          if (language && language !== "auto") {
-            formData.append("language", language);
+        return (async () => {
+          const initialDelayMs = order * 1000;
+          if (initialDelayMs > 0) {
+            await new Promise((resolve) => {
+              setTimeout(resolve, initialDelayMs);
+            });
           }
 
-          const response = await fetch("/api/transcribe", {
-            method: "POST",
-            body: formData,
-          });
+          if (!isMountedRef.current) return;
 
-          if (!response.ok) {
-            const payload = (await response.json().catch(() => null)) as
-              | { error?: string }
-              | null;
-            const message = payload?.error ?? "Lỗi khi xử lý transcribe.";
+          setJobs((prev) =>
+            prev.map((item, idx) =>
+              idx === jobIndex
+                ? { ...item, status: "processing", errorMessage: null }
+                : item,
+            ),
+          );
+
+          try {
+            const formData = new FormData();
+            formData.append("file", job.file);
+            formData.append("model", modelSnapshot);
+            if (languageSnapshot && languageSnapshot !== "auto") {
+              formData.append("language", languageSnapshot);
+            }
+
+            const response = await fetch("/api/transcribe", {
+              method: "POST",
+              body: formData,
+            });
+
+            if (!response.ok) {
+              const payload = (await response.json().catch(() => null)) as
+                | { error?: string }
+                | null;
+              const message = payload?.error ?? "Lỗi khi xử lý transcribe.";
+              if (!isMountedRef.current) return;
+              setJobs((prev) =>
+                prev.map((item, idx) =>
+                  idx === jobIndex
+                    ? { ...item, status: "error", errorMessage: message }
+                    : item,
+                ),
+              );
+            } else {
+              const data = (await response.json()) as TranscriptResponse;
+              const segments = data.segments ?? [];
+              const srtContent = segmentsToSrt(segments);
+              const durationSeconds =
+                segments.length > 0
+                  ? Math.max(
+                      0,
+                      (segments[segments.length - 1]?.end ?? 0) -
+                        (segments[0]?.start ?? 0),
+                    )
+                  : null;
+              const costUsd =
+                typeof data.costUsd === "number" &&
+                Number.isFinite(data.costUsd)
+                  ? data.costUsd
+                  : null;
+
+              if (!isMountedRef.current) return;
+
+              setJobs((prev) =>
+                prev.map((item, idx) =>
+                  idx === jobIndex
+                    ? {
+                        ...item,
+                        status: "done",
+                        errorMessage: null,
+                        srtContent,
+                        durationSeconds,
+                        costUsd,
+                      }
+                    : item,
+                ),
+              );
+            }
+          } catch (error: unknown) {
             if (!isMountedRef.current) return;
+            const message =
+              error instanceof Error && error.message
+                ? error.message
+                : "Không thể gọi API transcribe.";
             setJobs((prev) =>
               prev.map((item, idx) =>
-                idx === index
+                idx === jobIndex
                   ? { ...item, status: "error", errorMessage: message }
                   : item,
               ),
             );
-          } else {
-            const data = (await response.json()) as TranscriptResponse;
-            const segments = data.segments ?? [];
-            const srtContent = segmentsToSrt(segments);
-            const durationSeconds =
-              segments.length > 0
-                ? Math.max(
-                    0,
-                    (segments[segments.length - 1]?.end ?? 0) -
-                      (segments[0]?.start ?? 0),
-                  )
-                : null;
-            const costUsd =
-              typeof data.costUsd === "number" && Number.isFinite(data.costUsd)
-                ? data.costUsd
-                : null;
-
-            if (!isMountedRef.current) return;
-
-            setJobs((prev) =>
-              prev.map((item, idx) =>
-                idx === index
-                  ? {
-                      ...item,
-                      status: "done",
-                      errorMessage: null,
-                      srtContent,
-                      durationSeconds,
-                      costUsd,
-                    }
-                  : item,
-              ),
-            );
           }
-        } catch (error: unknown) {
-          if (!isMountedRef.current) return;
-          const message =
-            error instanceof Error && error.message
-              ? error.message
-              : "Không thể gọi API transcribe.";
-          setJobs((prev) =>
-            prev.map((item, idx) =>
-              idx === index
-                ? { ...item, status: "error", errorMessage: message }
-                : item,
-            ),
-          );
-        }
+        })();
+      });
 
-        if (!isMountedRef.current) {
-          return;
-        }
-
-        await new Promise((resolve) => {
-          setTimeout(resolve, 1000);
-        });
-      }
+      await Promise.allSettled(tasks);
 
       if (!isMountedRef.current) return;
       setIsRunning(false);
     };
 
-    void run();
+    void runAll();
   };
 
   const handleDownloadSingle = (job: BatchJob) => {
@@ -377,8 +387,8 @@ export function BatchTranscribeCard() {
                   Tải lên nhiều video hoặc âm thanh
                 </Text>
                 <Text fontSize="sm" color="gray.500" mt={1}>
-                  Hỗ trợ MP4, MOV, MP3, WAV. Không giới hạn số lượng file, xử lý lần lượt
-                  từng file (delay 1s).
+                  Hỗ trợ MP4, MOV, MP3, WAV. Không giới hạn số lượng file, gửi request
+                  cách nhau 1 giây và xử lý song song.
                 </Text>
               </Box>
             </VStack>
@@ -645,9 +655,9 @@ export function BatchTranscribeCard() {
                 </Text>
                 <Text fontSize="sm" color="gray.500" textAlign="center" maxW="md">
                   Hãy chọn nhiều video/âm thanh cùng lúc, sau đó bấm &quot;Bắt đầu xử
-                  lý&quot;. Hệ thống sẽ gọi API transcribe lần lượt cho từng file, mỗi
-                  request cách nhau 1 giây, sau đó bạn có thể tải từng file SRT hoặc tải
-                  tất cả dưới dạng một file nén.
+                  lý&quot;. Hệ thống sẽ gửi các request transcribe song song, mỗi request
+                  được bắt đầu cách nhau 1 giây, sau đó bạn có thể tải từng file SRT hoặc
+                  tải tất cả dưới dạng một file nén.
                 </Text>
               </VStack>
             </Box>
