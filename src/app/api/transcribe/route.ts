@@ -69,6 +69,76 @@ function parseNumber(value: FormDataEntryValue | string | number | null): number
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+type WordTimestamp = {
+  text: string;
+  start: number;
+  end: number;
+};
+
+function normalizeWords(words: DeepInfraWhisperResponse["words"]): WordTimestamp[] {
+  if (!Array.isArray(words)) return [];
+  return words
+    .map((entry) => {
+      const text = typeof entry?.word === "string" ? entry.word.trim() : "";
+      const start = typeof entry?.start === "number" ? entry.start : null;
+      const end = typeof entry?.end === "number" ? entry.end : null;
+      if (!text || start === null || end === null || Number.isNaN(start) || Number.isNaN(end)) {
+        return null;
+      }
+      return start <= end ? { text, start, end } : null;
+    })
+    .filter(Boolean) as WordTimestamp[];
+}
+
+function buildSegmentsFromWords(words: WordTimestamp[]): TranscriptSegment[] {
+  if (!words.length) return [];
+
+  const segments: TranscriptSegment[] = [];
+  const punctuationBreak = /[.?!。！？…]/;
+  const maxWords = 14;
+  const maxDuration = 4.5;
+
+  let buffer: WordTimestamp[] = [];
+
+  const flush = () => {
+    if (!buffer.length) return;
+    const start = buffer[0]?.start ?? 0;
+    const end = buffer[buffer.length - 1]?.end ?? start;
+    const text = buffer.map((item) => item.text).join(" ").replace(/\s+/g, " ").trim();
+    if (text) {
+      segments.push({
+        id: segments.length + 1,
+        start,
+        end,
+        text,
+      });
+    }
+    buffer = [];
+  };
+
+  for (const word of words) {
+    if (!buffer.length) {
+      buffer.push(word);
+      continue;
+    }
+
+    buffer.push(word);
+    const duration = word.end - buffer[0].start;
+    const shouldBreak =
+      punctuationBreak.test(word.text.slice(-1)) ||
+      buffer.length >= maxWords ||
+      duration >= maxDuration;
+
+    if (shouldBreak) {
+      flush();
+    }
+  }
+
+  flush();
+
+  return segments;
+}
+
 function pickString(source: unknown, ...keys: string[]): string | null {
   if (!source || typeof source !== "object") return null;
   const record = source as Record<string, unknown>;
@@ -197,23 +267,35 @@ export async function POST(request: Request) {
     }
 
     const data = (await response.json()) as DeepInfraWhisperResponse;
+    const wordCandidates = normalizeWords(
+      Array.isArray(data.words)
+        ? data.words
+        : Array.isArray(data.output?.words)
+          ? data.output.words
+          : [],
+    );
+    const wordSegments = buildSegmentsFromWords(wordCandidates);
     const rawSegments = Array.isArray(data.segments)
       ? data.segments
       : Array.isArray(data.output?.segments)
         ? data.output?.segments
         : [];
 
-    const segments: TranscriptSegment[] = rawSegments.map(
-      (segment, index) => ({
-        id:
-          typeof segment.id === "number"
-            ? segment.id
-            : index,
-        start: typeof segment.start === "number" ? segment.start : 0,
-        end: typeof segment.end === "number" ? segment.end : 0,
-        text: typeof segment.text === "string" ? segment.text : "",
-      }),
-    );
+    const baseSegments: TranscriptSegment[] = wordSegments.length
+      ? wordSegments
+      : rawSegments.map((segment, index) => ({
+          id: typeof segment?.id === "number" ? segment.id : index,
+          start: Number.isFinite(segment?.start ?? NaN) ? (segment?.start as number) : 0,
+          end: Number.isFinite(segment?.end ?? NaN) ? (segment?.end as number) : 0,
+          text: typeof segment?.text === "string" ? segment.text : "",
+        }));
+
+    const segments: TranscriptSegment[] = baseSegments.map((segment, index) => ({
+      id: typeof segment.id === "number" ? segment.id : index,
+      start: Number.isFinite(segment.start) ? segment.start : 0,
+      end: Number.isFinite(segment.end) ? segment.end : 0,
+      text: typeof segment.text === "string" ? segment.text : "",
+    }));
 
     const payload: TranscriptResponse = {
       text:
