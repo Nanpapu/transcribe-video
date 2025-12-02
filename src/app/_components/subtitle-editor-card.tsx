@@ -21,6 +21,9 @@ type SubtitleEditorCardProps = {
   error: string | null;
   activeIndex: number | null;
   isTranslating?: boolean;
+  showOriginal?: boolean;
+  hasTranslation?: boolean;
+  onViewModeChange?: (showOriginal: boolean) => void;
   onTranslateClick?: () => void;
   onDownloadSrt: () => void;
   onTimeChange: (
@@ -38,6 +41,9 @@ export function SubtitleEditorCard({
   error,
   activeIndex,
   isTranslating = false,
+  showOriginal = false,
+  hasTranslation = false,
+  onViewModeChange,
   onTranslateClick,
   onDownloadSrt,
   onTimeChange,
@@ -94,6 +100,26 @@ export function SubtitleEditorCard({
             )}
           </HStack>
           <HStack gap={3}>
+            {hasTranslation && onViewModeChange && (
+              <HStack gap={1}>
+                <Button
+                  size="xs"
+                  variant={showOriginal ? "solid" : "outline"}
+                  colorPalette="blue"
+                  onClick={() => onViewModeChange(true)}
+                >
+                  Bản gốc
+                </Button>
+                <Button
+                  size="xs"
+                  variant={!showOriginal ? "solid" : "outline"}
+                  colorPalette="blue"
+                  onClick={() => onViewModeChange(false)}
+                >
+                  Bản dịch
+                </Button>
+              </HStack>
+            )}
             {onTranslateClick && (
               <Button
                 size="sm"

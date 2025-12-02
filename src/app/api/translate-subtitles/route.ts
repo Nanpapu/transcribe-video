@@ -75,9 +75,9 @@ async function callGeminiWithRetry(payload: TranslateRequestBody): Promise<Trans
     try {
       const response = await client.models.generateContentStream({
         model: modelId,
-                config: {
+          config: {
           thinkingConfig: {
-            thinkingBudget: 256,
+            thinkingBudget: 512,
           },
         },
         contents,

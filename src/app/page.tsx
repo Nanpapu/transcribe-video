@@ -20,7 +20,10 @@ import { VideoPreviewCard } from "./_components/video-preview-card";
 import { SubtitleEditorCard } from "./_components/subtitle-editor-card";
 import { BatchTranscribeCard } from "./_components/batch-transcribe-card";
 
-type EditableSegment = EditableTranscriptSegment;
+type EditableSegment = EditableTranscriptSegment & {
+  originalText?: string;
+  translatedText?: string | null;
+};
 
 type AsrLanguage = "auto" | "zh" | "ko" | "en" | "ja" | "vi";
 
@@ -41,6 +44,7 @@ export default function HomePage() {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [shouldTranslate, setShouldTranslate] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -91,6 +95,7 @@ export default function HomePage() {
     if (inputRef.current) inputRef.current.value = "";
     setFileDuration(null);
     setActualCostUsd(null);
+    setShowOriginal(false);
   };
 
   const handleTranslateSegments = async (sourceSegments?: EditableSegment[]) => {
@@ -105,7 +110,7 @@ export default function HomePage() {
       id: segment.id,
       start: segment.start,
       end: segment.end,
-      text: segment.text,
+      text: segment.originalText ?? segment.text,
     }));
 
     setIsTranslating(true);
@@ -113,11 +118,22 @@ export default function HomePage() {
       const translatedMap = await translateSegmentsToVietnamese(payloadSegments);
       if (translatedMap.size) {
         setSegments((prev) =>
-          prev.map((segment) => ({
-            ...segment,
-            text: translatedMap.get(segment.id) ?? segment.text,
-          })),
+          prev.map((segment) => {
+            const originalText = segment.originalText ?? segment.text;
+            const translatedText =
+              translatedMap.get(segment.id) ??
+              segment.translatedText ??
+              segment.text;
+
+            return {
+              ...segment,
+              originalText,
+              translatedText,
+              text: showOriginal ? originalText : translatedText,
+            };
+          }),
         );
+        setShowOriginal(false);
         console.log("[ui] translate:done", {
           translatedCount: translatedMap.size,
         });
@@ -191,6 +207,8 @@ export default function HomePage() {
         ...segment,
         startTimecode: formatTimecode(segment.start),
         endTimecode: formatTimecode(segment.end),
+        originalText: segment.text,
+        translatedText: null,
       }));
 
       if (!mappedSegments.length) {
@@ -271,7 +289,21 @@ export default function HomePage() {
 
   const handleTextChange = (index: number, value: string) => {
     setSegments((prev) =>
-      prev.map((seg, i) => (i === index ? { ...seg, text: value } : seg)),
+      prev.map((seg, i) => {
+        if (i !== index) return seg;
+        if (showOriginal) {
+          return {
+            ...seg,
+            text: value,
+            originalText: value,
+          };
+        }
+        return {
+          ...seg,
+          text: value,
+          translatedText: value,
+        };
+      }),
     );
   };
 
@@ -319,6 +351,10 @@ export default function HomePage() {
     videoRef.current.currentTime = target.start;
     videoRef.current.play().catch(() => {});
   };
+
+  const hasTranslation = segments.some(
+    (segment) => typeof segment.translatedText === "string" && segment.translatedText.length > 0,
+  );
 
   return (
     <Box suppressHydrationWarning minH="100vh" bg="gray.50" color="gray.900" pb={20}>
@@ -421,9 +457,12 @@ export default function HomePage() {
                     onTextChange={handleTextChange}
                     onSeekToSegment={handleSeekToSegment}
                     isTranslating={isTranslating}
-                    onTranslateClick={
-                      shouldTranslate ? () => void handleTranslateSegments() : undefined
-                    }
+                    showOriginal={showOriginal}
+                    hasTranslation={hasTranslation}
+                    onViewModeChange={setShowOriginal}
+                    onTranslateClick={() => {
+                      void handleTranslateSegments();
+                    }}
                   />
                 </Stack>
               </Grid>
