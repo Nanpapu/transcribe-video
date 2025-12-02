@@ -10,20 +10,41 @@ import {
 } from "react";
 import {
   Alert,
+  Badge,
   Box,
   Button,
+  Card,
+  Container,
   Field,
   Flex,
+  Grid,
+  Heading,
   HStack,
   Input,
   NativeSelect,
+  Spinner,
   Stack,
   Table,
   Text,
   Textarea,
   VStack,
 } from "@chakra-ui/react";
-import { Download, UploadCloud } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Download,
+  FileVideo,
+  LayoutTemplate,
+  Play,
+  Trash2,
+  Type,
+  UploadCloud,
+  Video,
+  Wand2,
+} from "lucide-react";
+
+// --- Types & Helpers ---
 
 type TranscriptSegment = {
   id: number;
@@ -62,20 +83,14 @@ function formatTimecode(totalSeconds: number): string {
 
 function parseTimecode(raw: string): number | null {
   const value = raw.trim();
-
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
 
   const [main, msPart] = value.split(/[.,]/);
   const msRaw = msPart ? msPart.trim() : "";
   const ms = msRaw ? Number.parseInt(msRaw.slice(0, 3).padEnd(3, "0"), 10) : 0;
 
   const parts = main.split(":").map((part) => part.trim()).filter(Boolean);
-
-  if (parts.some((part) => Number.isNaN(Number.parseInt(part, 10)))) {
-    return null;
-  }
+  if (parts.some((part) => Number.isNaN(Number.parseInt(part, 10)))) return null;
 
   let hours = 0;
   let minutes = 0;
@@ -94,9 +109,7 @@ function parseTimecode(raw: string): number | null {
     return null;
   }
 
-  if (minutes > 59 || seconds > 59) {
-    return null;
-  }
+  if (minutes > 59 || seconds > 59) return null;
 
   return hours * 3600 + minutes * 60 + seconds + ms / 1000;
 }
@@ -106,15 +119,13 @@ function segmentsToSrt(segments: TranscriptSegment[]): string {
     .map((segment, index) => {
       const start = formatTimecode(segment.start);
       const end = formatTimecode(segment.end);
-
-      return `${index + 1}
-${start} --> ${end}
-${segment.text}
-`;
+      return `${index + 1}\n${start} --> ${end}\n${segment.text}\n`;
     })
     .join("\n")
     .trim();
 }
+
+// --- Main Component ---
 
 export default function HomePage() {
   const [file, setFile] = useState<File | null>(null);
@@ -129,14 +140,11 @@ export default function HomePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(
-    () => () => {
-      if (videoUrl) {
-        URL.revokeObjectURL(videoUrl);
-      }
-    },
-    [videoUrl],
-  );
+  useEffect(() => {
+    return () => {
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
+    };
+  }, [videoUrl]);
 
   const currentSegment = useMemo(
     () => (activeIndex === null ? null : segments[activeIndex] ?? null),
@@ -145,27 +153,15 @@ export default function HomePage() {
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextFile = event.target.files?.[0] ?? null;
-
     if (!nextFile) {
-      setFile(null);
-      setVideoUrl((previous) => {
-        if (previous) {
-          URL.revokeObjectURL(previous);
-        }
-
-        return null;
-      });
+      handleClearFile();
       return;
     }
 
     setFile(nextFile);
     setError(null);
-
-    setVideoUrl((previous) => {
-      if (previous) {
-        URL.revokeObjectURL(previous);
-      }
-
+    setVideoUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
       return URL.createObjectURL(nextFile);
     });
   };
@@ -176,23 +172,16 @@ export default function HomePage() {
     setError(null);
     setActiveIndex(null);
     setCurrentTime(0);
-
-    setVideoUrl((previous) => {
-      if (previous) {
-        URL.revokeObjectURL(previous);
-      }
-
+    setVideoUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
       return null;
     });
-
-    if (inputRef.current) {
-      inputRef.current.value = "";
-    }
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   const handleTranscribe = async () => {
     if (!file) {
-      setError("Chưa chọn file video hoặc audio.");
+      setError("Vui lòng chọn file video hoặc audio trước.");
       return;
     }
 
@@ -209,33 +198,23 @@ export default function HomePage() {
       });
 
       if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        const message = payload?.error ?? "Transcribe thất bại.";
-        setError(message);
-        return;
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Lỗi khi xử lý transcribe.");
       }
 
       const data = (await response.json()) as TranscriptResponse;
-
-      const mappedSegments: EditableSegment[] = (data.segments ?? []).map(
-        (segment) => ({
-          ...segment,
-          startTimecode: formatTimecode(segment.start),
-          endTimecode: formatTimecode(segment.end),
-        }),
-      );
+      const mappedSegments: EditableSegment[] = (data.segments ?? []).map((segment) => ({
+        ...segment,
+        startTimecode: formatTimecode(segment.start),
+        endTimecode: formatTimecode(segment.end),
+      }));
 
       setSegments(mappedSegments);
       setActiveIndex(null);
       setCurrentTime(0);
-
-      if (videoRef.current) {
-        videoRef.current.currentTime = 0;
-      }
-    } catch {
-      setError("Không thể gọi API transcribe. Kiểm tra server hoặc cấu hình lại sau.");
+      if (videoRef.current) videoRef.current.currentTime = 0;
+    } catch (err: any) {
+      setError(err.message || "Không thể gọi API transcribe.");
     } finally {
       setIsTranscribing(false);
     }
@@ -246,452 +225,482 @@ export default function HomePage() {
     field: "startTimecode" | "endTimecode",
     value: string,
   ) => {
-    setSegments((previous) =>
-      previous.map((segment, segmentIndex) =>
-        segmentIndex === index ? { ...segment, [field]: value } : segment,
-      ),
+    setSegments((prev) =>
+      prev.map((seg, i) => (i === index ? { ...seg, [field]: value } : seg)),
     );
   };
 
   const handleTimeBlur = (index: number, kind: "start" | "end") => {
-    setSegments((previous) => {
-      const draft = [...previous];
+    setSegments((prev) => {
+      const draft = [...prev];
       const segment = draft[index];
-
-      if (!segment) {
-        return previous;
-      }
+      if (!segment) return prev;
 
       const raw = kind === "start" ? segment.startTimecode : segment.endTimecode;
       const seconds = parseTimecode(raw);
 
       if (seconds === null) {
-        const fallbackSeconds = kind === "start" ? segment.start : segment.end;
-        const fallback = formatTimecode(fallbackSeconds);
-
-        draft[index] =
-          kind === "start"
-            ? { ...segment, startTimecode: fallback }
-            : { ...segment, endTimecode: fallback };
-
+        const fallback = formatTimecode(kind === "start" ? segment.start : segment.end);
+        draft[index] = {
+          ...segment,
+          [kind === "start" ? "startTimecode" : "endTimecode"]: fallback,
+        };
         return draft;
       }
 
-      if (kind === "start") {
-        draft[index] = {
-          ...segment,
-          start: seconds,
-          startTimecode: formatTimecode(seconds),
-        };
-      } else {
-        draft[index] = {
-          ...segment,
-          end: seconds,
-          endTimecode: formatTimecode(seconds),
-        };
-      }
-
+      draft[index] = {
+        ...segment,
+        [kind === "start" ? "start" : "end"]: seconds,
+        [kind === "start" ? "startTimecode" : "endTimecode"]: formatTimecode(seconds),
+      };
       return draft;
     });
   };
 
   const handleTextChange = (index: number, value: string) => {
-    setSegments((previous) =>
-      previous.map((segment, segmentIndex) =>
-        segmentIndex === index ? { ...segment, text: value } : segment,
-      ),
+    setSegments((prev) =>
+      prev.map((seg, i) => (i === index ? { ...seg, text: value } : seg)),
     );
   };
 
   const handleDownloadSrt = () => {
-    if (!segments.length) {
-      return;
-    }
-
+    if (!segments.length) return;
     const srtContent = segmentsToSrt(segments);
     const blob = new Blob([srtContent], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
-
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = "subtitles.srt";
     anchor.click();
-
     URL.revokeObjectURL(url);
   };
 
   const handleTimeUpdate = (event: SyntheticEvent<HTMLVideoElement>) => {
     const nextTime = event.currentTarget.currentTime;
     setCurrentTime(nextTime);
-
     if (!segments.length) {
       setActiveIndex(null);
       return;
     }
-
-    const foundIndex =
-      segments.findIndex(
-        (segment) => nextTime >= segment.start && nextTime < segment.end,
-      ) ?? -1;
-
+    const foundIndex = segments.findIndex(
+      (seg) => nextTime >= seg.start && nextTime < seg.end,
+    );
     setActiveIndex(foundIndex >= 0 ? foundIndex : null);
   };
 
   const handleSeekToSegment = (index: number) => {
     const target = segments[index];
-
-    if (!target || !videoRef.current) {
-      return;
-    }
-
+    if (!target || !videoRef.current) return;
     videoRef.current.currentTime = target.start;
     videoRef.current.play().catch(() => {});
   };
 
   const handlePositionChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value as SubtitlePosition;
-    setSubtitlePosition(value);
+    setSubtitlePosition(event.target.value as SubtitlePosition);
   };
 
   const overlayStyles = (() => {
-    if (subtitlePosition === "top") {
-      return {
-        top: "8",
-        bottom: undefined,
-        transform: "translateX(-50%)",
-      };
+    switch (subtitlePosition) {
+      case "top":
+        return { top: "8%", bottom: undefined, transform: "translateX(-50%)" };
+      case "middle":
+        return { top: "50%", bottom: undefined, transform: "translate(-50%, -50%)" };
+      default:
+        return { top: undefined, bottom: "8%", transform: "translateX(-50%)" };
     }
-
-    if (subtitlePosition === "middle") {
-      return {
-        top: "50%",
-        bottom: undefined,
-        transform: "translate(-50%, -50%)",
-      };
-    }
-
-    return {
-      top: undefined,
-      bottom: "8",
-      transform: "translateX(-50%)",
-    };
   })();
 
   return (
-    <Box minH="100vh" bg="gray.50" color="gray.900">
-      <Box maxW="1120px" mx="auto" px={{ base: 4, md: 6 }} py={{ base: 6, md: 10 }}>
-        <VStack align="stretch" gap={5}>
-          <Box>
-            <Text fontSize="sm" color="gray.500" textTransform="uppercase" letterSpacing="0.12em">
-              Subtitle tool
-            </Text>
-            <Text fontSize="2xl" fontWeight="semibold" mt={1}>
-              Transcribe video, chỉnh sửa sub, xuất SRT
-            </Text>
-            <Text fontSize="sm" color="gray.600" mt={2} maxW="640px">
-              Chọn file video hoặc âm thanh, gửi đi transcribe, sau đó chỉnh sửa timecode và nội dung
-              sub. Subtitle overlay mặc định nền vàng, chữ đen giống CapCut.
-            </Text>
-          </Box>
+    <Box minH="100vh" bg="gray.50" color="gray.900" pb={20}>
+      {/* Header */}
+      <Box bg="white" borderBottomWidth="1px" borderColor="gray.200" py={5} px={8} position="sticky" top={0} zIndex={10} shadow="sm">
+        <Container maxW="7xl">
+          <HStack justify="space-between">
+            <HStack gap={4}>
+              <Flex align="center" justify="center" p={2.5} bg="blue.600" borderRadius="xl" color="white" shadow="md">
+                <Video size={24} />
+              </Flex>
+              <Box>
+                <Heading size="md" fontWeight="bold" letterSpacing="tight" lineHeight="1.2">
+                  Transcribe Video
+                </Heading>
+                <Text fontSize="sm" color="gray.500" fontWeight="medium">
+                  Tạo phụ đề tự động bằng AI
+                </Text>
+              </Box>
+            </HStack>
+            <HStack gap={4}>
+              <Button size="sm" variant="ghost" colorPalette="gray">
+                Hướng dẫn
+              </Button>
+              <Button size="sm" variant="surface" colorPalette="blue">
+                Dự án mới
+              </Button>
+            </HStack>
+          </HStack>
+        </Container>
+      </Box>
 
-          <Flex
-            gap={{ base: 6, lg: 8 }}
-            mt={2}
-            direction={{ base: "column", lg: "row" }}
-            align="stretch"
-          >
-            <Box
-              flex={{ base: "1", lg: "3" }}
-              borderWidth="1px"
-              borderColor="gray.200"
-              borderRadius="xl"
-              bg="white"
-              p={4}
-              boxShadow="sm"
-            >
-              <Stack gap={4}>
-                <Box
-                  borderWidth="1px"
-                  borderStyle="dashed"
-                  borderColor="gray.300"
-                  borderRadius="xl"
-                  bg="gray.50"
-                  px={4}
-                  py={6}
-                  cursor="pointer"
-                  onClick={() => inputRef.current?.click()}
-                >
-                  <VStack gap={3}>
-                    <Box
-                      w={12}
-                      h={12}
-                      borderRadius="full"
-                      bg="gray.100"
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                    >
-                      <UploadCloud size={22} />
-                    </Box>
-                    <Text fontWeight="medium">
-                      {file ? "Đã chọn file, bấm Transcribe để xử lý" : "Nhấn để chọn video / audio"}
-                    </Text>
-                    <Text fontSize="xs" color="gray.500">
-                      Hỗ trợ video và âm thanh phổ biến. Thời lượng càng dài thì thời gian xử lý càng
-                      lâu.
-                    </Text>
-                    {file ? (
-                      <Text fontSize="xs" color="gray.600">
-                        File hiện tại: {file.name}
-                      </Text>
-                    ) : null}
-                  </VStack>
-                  <Input
-                    ref={inputRef}
-                    type="file"
-                    accept="video/*,audio/*"
-                    display="none"
-                    onChange={handleFileChange}
-                  />
-                </Box>
-
-                <HStack justify="space-between" gap={3}>
-                  <HStack gap={2}>
+      <Container maxW="7xl" mt={10} px={6}>
+        <Grid templateColumns={{ base: "1fr", lg: "1fr 1.2fr" }} gap={10} alignItems="start">
+          {/* Left Column: Upload & Preview */}
+          <Stack gap={8}>
+            {/* Upload Card */}
+            <Card.Root variant="elevated" shadow="md" borderRadius="xl" overflow="hidden">
+              <Card.Header bg="white" borderBottomWidth="1px" borderColor="gray.100" py={4} px={6}>
+                <HStack justify="space-between">
+                  <Card.Title fontSize="lg" fontWeight="semibold">File nguồn</Card.Title>
+                  {file && (
+                    <Badge colorPalette="green" variant="surface" px={2} py={1} borderRadius="md">
+                      <CheckCircle2 size={14} style={{ marginRight: 6 }} /> Sẵn sàng
+                    </Badge>
+                  )}
+                </HStack>
+              </Card.Header>
+              <Card.Body p={6}>
+                {!file ? (
+                  <Box
+                    borderWidth="2px"
+                    borderStyle="dashed"
+                    borderColor="gray.300"
+                    borderRadius="xl"
+                    bg="gray.50"
+                    p={12}
+                    textAlign="center"
+                    cursor="pointer"
+                    transition="all 0.2s"
+                    _hover={{ borderColor: "blue.500", bg: "blue.50/30" }}
+                    onClick={() => inputRef.current?.click()}
+                  >
+                    <VStack gap={5}>
+                      <Flex p={5} bg="white" borderRadius="full" shadow="sm" color="blue.600" justify="center" align="center">
+                        <UploadCloud size={36} />
+                      </Flex>
+                      <Box>
+                        <Text fontWeight="semibold" fontSize="lg" color="gray.800">
+                          Tải lên video hoặc âm thanh
+                        </Text>
+                        <Text fontSize="sm" color="gray.500" mt={1}>
+                          Hỗ trợ MP4, MOV, MP3, WAV
+                        </Text>
+                      </Box>
+                    </VStack>
+                  </Box>
+                ) : (
+                  <HStack
+                    p={4}
+                    bg="gray.50"
+                    borderRadius="lg"
+                    borderWidth="1px"
+                    borderColor="gray.200"
+                    justify="space-between"
+                  >
+                    <HStack gap={4}>
+                      <Flex p={3} bg="white" borderRadius="md" color="blue.600" shadow="xs" border="1px solid" borderColor="gray.100">
+                        <FileVideo size={24} />
+                      </Flex>
+                      <Box>
+                        <Text fontWeight="medium" fontSize="sm" lineClamp={1} color="gray.900">
+                          {file.name}
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          {(file.size / (1024 * 1024)).toFixed(2)} MB
+                        </Text>
+                      </Box>
+                    </HStack>
                     <Button
                       size="sm"
-                      colorPalette="yellow"
-                      onClick={handleTranscribe}
-                      loading={isTranscribing}
-                      disabled={!file || isTranscribing}
-                    >
-                      Transcribe
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
+                      variant="ghost"
+                      colorPalette="red"
                       onClick={handleClearFile}
-                      disabled={!file && !segments.length}
+                      aria-label="Xóa file"
                     >
-                      Xóa file
+                      <Trash2 size={18} />
                     </Button>
+                  </HStack>
+                )}
+                <Input
+                  ref={inputRef}
+                  type="file"
+                  accept="video/*,audio/*"
+                  display="none"
+                  onChange={handleFileChange}
+                />
+              </Card.Body>
+              {file && (
+                <Card.Footer pt={0} pb={6} px={6}>
+                  <Button
+                    w="full"
+                    colorPalette="blue"
+                    size="lg"
+                    onClick={handleTranscribe}
+                    loading={isTranscribing}
+                    disabled={isTranscribing}
+                    shadow="sm"
+                  >
+                    {isTranscribing ? (
+                      <>
+                        <Spinner size="sm" mr={2} /> Đang xử lý...
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 size={18} style={{ marginRight: 8 }} /> Bắt đầu Transcribe
+                      </>
+                    )}
+                  </Button>
+                </Card.Footer>
+              )}
+            </Card.Root>
+
+            {/* Video Preview */}
+            <Card.Root variant="elevated" shadow="md" borderRadius="xl" overflow="hidden">
+              <Card.Header bg="white" borderBottomWidth="1px" borderColor="gray.100" py={4} px={6}>
+                <HStack justify="space-between">
+                  <Card.Title fontSize="lg" fontWeight="semibold">Xem trước</Card.Title>
+                  <Field.Root orientation="horizontal" w="auto">
+                    <NativeSelect.Root size="xs" variant="subtle" width="140px">
+                      <NativeSelect.Field
+                        value={subtitlePosition}
+                        onChange={handlePositionChange}
+                        fontSize="xs"
+                        fontWeight="medium"
+                      >
+                        <option value="bottom">Dưới (Bottom)</option>
+                        <option value="middle">Giữa (Middle)</option>
+                        <option value="top">Trên (Top)</option>
+                      </NativeSelect.Field>
+                      <NativeSelect.Indicator />
+                    </NativeSelect.Root>
+                  </Field.Root>
+                </HStack>
+              </Card.Header>
+              <Card.Body p={0} position="relative" bg="black">
+                {videoUrl ? (
+                  <Box position="relative">
+                    <Box
+                      as="video"
+                      ref={videoRef}
+                      src={videoUrl}
+                      controls
+                      w="100%"
+                      h="auto"
+                      maxH="400px"
+                      display="block"
+                      onTimeUpdate={handleTimeUpdate}
+                    />
+                    {currentSegment && (
+                      <Box
+                        position="absolute"
+                        left="50%"
+                        px={4}
+                        py={2}
+                        bg="yellow.400"
+                        color="black"
+                        borderRadius="md"
+                        maxW="90%"
+                        textAlign="center"
+                        fontWeight="bold"
+                        fontSize="lg"
+                        textShadow="none"
+                        boxShadow="0 2px 10px rgba(0,0,0,0.2)"
+                        whiteSpace="pre-wrap"
+                        pointerEvents="none"
+                        {...overlayStyles}
+                      >
+                        {currentSegment.text}
+                      </Box>
+                    )}
+                  </Box>
+                ) : (
+                  <Flex
+                    align="center"
+                    justify="center"
+                    h="320px"
+                    bg="gray.900"
+                    color="gray.600"
+                    direction="column"
+                    gap={4}
+                  >
+                    <LayoutTemplate size={56} strokeWidth={1} />
+                    <Text fontSize="sm" color="gray.500">Video xem trước sẽ hiện ở đây</Text>
+                  </Flex>
+                )}
+              </Card.Body>
+              {videoUrl && (
+                <Card.Footer bg="gray.50" py={3} px={6} borderTopWidth="1px" borderColor="gray.100">
+                  <HStack justify="space-between" w="full" fontSize="xs" color="gray.500" fontWeight="medium">
+                    <HStack>
+                      <Clock size={14} />
+                      <Text>{formatTimecode(currentTime)}</Text>
+                    </HStack>
+                    <Text>
+                      {segments.length > 0
+                        ? `Đoạn: ${(activeIndex ?? -1) + 1} / ${segments.length}`
+                        : "Chưa có đoạn nào"}
+                    </Text>
+                  </HStack>
+                </Card.Footer>
+              )}
+            </Card.Root>
+          </Stack>
+
+          {/* Right Column: Editor */}
+          <Stack gap={6} h="full">
+            <Card.Root variant="elevated" shadow="md" borderRadius="xl" h="full" display="flex" flexDirection="column" overflow="hidden">
+              <Card.Header bg="white" borderBottomWidth="1px" borderColor="gray.100" py={4} px={6}>
+                <HStack justify="space-between">
+                  <HStack gap={3}>
+                    <Card.Title fontSize="lg" fontWeight="semibold">Phụ đề</Card.Title>
+                    <Badge variant="surface" colorPalette="blue" px={2} borderRadius="full">
+                      {segments.length}
+                    </Badge>
                   </HStack>
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={handleDownloadSrt}
+                    colorPalette="gray"
                     disabled={!segments.length}
-                    gap={1.5}
+                    onClick={handleDownloadSrt}
+                    fontWeight="medium"
                   >
-                    <Download size={16} />
-                    Tải SRT
+                    <Download size={16} style={{ marginRight: 6 }} /> Tải file SRT
                   </Button>
                 </HStack>
+              </Card.Header>
 
-                <Field.Root>
-                  <Field.Label fontSize="sm">Vị trí subtitle trên video</Field.Label>
-                  <NativeSelect.Root size="sm" maxW="220px" mt={2}>
-                    <NativeSelect.Field
-                      aria-label="Vị trí subtitle trên video"
-                      title="Vị trí subtitle trên video"
-                      value={subtitlePosition}
-                      onChange={handlePositionChange}
-                    >
-                      <option value="bottom">Dưới (mặc định)</option>
-                      <option value="middle">Giữa khung hình</option>
-                      <option value="top">Trên cùng</option>
-                    </NativeSelect.Field>
-                    <NativeSelect.Indicator />
-                  </NativeSelect.Root>
-                </Field.Root>
-
-                <Box mt={2}>
-                  <Text fontSize="sm" mb={2} color="gray.700">
-                    Preview video kèm subtitle
-                  </Text>
-                  <Box
-                    position="relative"
-                    borderRadius="lg"
-                    overflow="hidden"
-                    bg="black"
-                    minH="220px"
-                  >
-                    {videoUrl ? (
-                      <>
-                        <Box
-                          as="video"
-                          ref={videoRef}
-                          src={videoUrl}
-                          controls
-                          w="100%"
-                          h="auto"
-                          display="block"
-                          onTimeUpdate={handleTimeUpdate}
-                        />
-                        {currentSegment ? (
-                          <Box
-                            position="absolute"
-                            left="50%"
-                            px={4}
-                            py={2}
-                            bg="yellow.300"
-                            color="black"
-                            borderRadius="md"
-                            maxW="90%"
-                            textAlign="center"
-                            fontWeight="semibold"
-                            fontSize="lg"
-                            boxShadow="0 0 12px rgba(0,0,0,0.6)"
-                            {...overlayStyles}
-                          >
-                            <Text>{currentSegment.text}</Text>
-                          </Box>
-                        ) : null}
-                      </>
-                    ) : (
-                      <Flex
-                        align="center"
-                        justify="center"
-                        h="100%"
-                        minH="220px"
-                        px={4}
-                        py={6}
-                      >
-                        <Text fontSize="sm" color="gray.500" textAlign="center">
-                          Chọn file để xem preview video và subtitle.
-                        </Text>
-                      </Flex>
-                    )}
+              <Card.Body p={0} flex="1" overflow="hidden" display="flex" flexDirection="column" bg="white">
+                {error && (
+                  <Box p={6}>
+                    <Alert.Root status="error" variant="subtle" borderRadius="lg">
+                      <Alert.Indicator>
+                        <AlertCircle />
+                      </Alert.Indicator>
+                      <Alert.Content>
+                        <Alert.Title>Lỗi</Alert.Title>
+                        <Alert.Description>{error}</Alert.Description>
+                      </Alert.Content>
+                    </Alert.Root>
                   </Box>
-                </Box>
-              </Stack>
-            </Box>
+                )}
 
-            <Box
-              flex={{ base: "1", lg: "2" }}
-              borderWidth="1px"
-              borderColor="gray.200"
-              borderRadius="xl"
-              bg="white"
-              p={4}
-              boxShadow="sm"
-            >
-              <Stack gap={3} h="100%">
-                <HStack justify="space-between" align="center">
-                  <Text fontWeight="medium">Subtitle segments</Text>
-                  <Text fontSize="xs" color="gray.500">
-                    Tổng: {segments.length} đoạn
-                  </Text>
-                </HStack>
-
-                {error ? (
-                  <Alert.Root
-                    borderStartWidth="4px"
-                    borderStartColor="red.400"
-                    bg="red.50"
+                {segments.length === 0 ? (
+                  <Flex
+                    direction="column"
+                    align="center"
+                    justify="center"
+                    flex="1"
+                    p={10}
+                    color="gray.400"
+                    textAlign="center"
+                    minH="400px"
                   >
-                    <Alert.Indicator />
-                    <Alert.Content>
-                      <Alert.Title color="red.800">Lỗi</Alert.Title>
-                      <Alert.Description fontSize="sm" color="red.800">
-                        {error}
-                      </Alert.Description>
-                    </Alert.Content>
-                  </Alert.Root>
-                ) : null}
-
-                <Box
-                  flex="1"
-                  borderRadius="lg"
-                  borderWidth="1px"
-                  borderColor="gray.200"
-                  overflow="hidden"
-                  bg="white"
-                >
-                  {segments.length === 0 ? (
-                    <Flex
-                      align="center"
-                      justify="center"
-                      h="100%"
-                      minH="260px"
-                      px={4}
-                      py={6}
-                    >
-                      <Text fontSize="sm" color="gray.500" textAlign="center">
-                        Chưa có dữ liệu subtitle. Chọn file và bấm Transcribe để tạo danh sách segment
-                        SRT, sau đó chỉnh thời gian và nội dung tại đây.
-                      </Text>
+                    <Flex p={6} bg="gray.50" borderRadius="full" mb={6} justify="center" align="center">
+                      <Type size={40} className="text-gray-300" />
                     </Flex>
-                  ) : (
-                    <Box maxH="420px" overflowY="auto">
-                      <Table.Root size="sm" variant="line">
-                        <Table.Header position="sticky" top={0} bg="gray.50" zIndex={1}>
-                          <Table.Row>
-                            <Table.ColumnHeader w="48px">#</Table.ColumnHeader>
-                            <Table.ColumnHeader w="152px">Start</Table.ColumnHeader>
-                            <Table.ColumnHeader w="152px">End</Table.ColumnHeader>
-                            <Table.ColumnHeader>Text</Table.ColumnHeader>
-                          </Table.Row>
-                        </Table.Header>
-                        <Table.Body>
-                          {segments.map((segment, index) => (
+                    <Text fontSize="lg" fontWeight="medium" color="gray.600">
+                      Chưa có dữ liệu phụ đề
+                    </Text>
+                    <Text fontSize="sm" maxW="xs" mt={2} color="gray.500" lineHeight="tall">
+                      Hãy tải video lên và nhấn "Bắt đầu Transcribe" để hệ thống tự động tạo phụ đề cho bạn.
+                    </Text>
+                  </Flex>
+                ) : (
+                  <Box overflowY="auto" flex="1" className="custom-scrollbar">
+                    <Table.Root size="sm" stickyHeader interactive>
+                      <Table.Header>
+                        <Table.Row bg="gray.50">
+                          <Table.ColumnHeader w="60px" textAlign="center" py={3}>#</Table.ColumnHeader>
+                          <Table.ColumnHeader w="140px" py={3}>Thời gian</Table.ColumnHeader>
+                          <Table.ColumnHeader py={3}>Nội dung</Table.ColumnHeader>
+                          <Table.ColumnHeader w="50px" py={3}></Table.ColumnHeader>
+                        </Table.Row>
+                      </Table.Header>
+                      <Table.Body>
+                        {segments.map((segment, index) => {
+                          const isActive = index === activeIndex;
+                          return (
                             <Table.Row
                               key={segment.id ?? index}
-                              bg={index === activeIndex ? "yellow.50" : "transparent"}
-                              _hover={{ bg: "gray.50", cursor: "pointer" }}
-                              onClick={() => handleSeekToSegment(index)}
+                              bg={isActive ? "blue.50" : undefined}
+                              _hover={{ bg: isActive ? "blue.100" : "gray.50" }}
+                              transition="background 0.1s"
                             >
-                              <Table.Cell fontSize="xs" color="gray.500">
+                              <Table.Cell textAlign="center" color="gray.500" fontSize="xs" fontWeight="medium">
                                 {index + 1}
                               </Table.Cell>
                               <Table.Cell>
-                                <Input
-                                  size="xs"
-                                  value={segment.startTimecode}
-                                  onChange={(event) =>
-                                    handleTimeChange(index, "startTimecode", event.target.value)
-                                  }
-                                  onBlur={() => handleTimeBlur(index, "start")}
-                                />
+                                <VStack gap={1.5} align="start">
+                                  <Input
+                                    size="xs"
+                                    variant="subtle"
+                                    fontFamily="mono"
+                                    fontSize="2xs"
+                                    value={segment.startTimecode}
+                                    onChange={(e) =>
+                                      handleTimeChange(index, "startTimecode", e.target.value)
+                                    }
+                                    onBlur={() => handleTimeBlur(index, "start")}
+                                    w="84px"
+                                    color="green.700"
+                                    bg="white"
+                                    borderRadius="sm"
+                                    px={1}
+                                  />
+                                  <Input
+                                    size="xs"
+                                    variant="subtle"
+                                    fontFamily="mono"
+                                    fontSize="2xs"
+                                    value={segment.endTimecode}
+                                    onChange={(e) =>
+                                      handleTimeChange(index, "endTimecode", e.target.value)
+                                    }
+                                    onBlur={() => handleTimeBlur(index, "end")}
+                                    w="84px"
+                                    color="red.700"
+                                    bg="white"
+                                    borderRadius="sm"
+                                    px={1}
+                                  />
+                                </VStack>
                               </Table.Cell>
-                              <Table.Cell>
-                                <Input
-                                  size="xs"
-                                  value={segment.endTimecode}
-                                  onChange={(event) =>
-                                    handleTimeChange(index, "endTimecode", event.target.value)
-                                  }
-                                  onBlur={() => handleTimeBlur(index, "end")}
-                                />
-                              </Table.Cell>
-                              <Table.Cell>
+                              <Table.Cell py={3}>
                                 <Textarea
-                                  size="xs"
+                                  size="sm"
+                                  variant="outline"
+                                  resize="vertical"
                                   rows={2}
                                   value={segment.text}
-                                  onChange={(event) => handleTextChange(index, event.target.value)}
+                                  onChange={(e) => handleTextChange(index, e.target.value)}
+                                  bg="white"
+                                  borderColor={isActive ? "blue.200" : "gray.200"}
+                                  _focus={{ borderColor: "blue.500", ring: "2px", ringColor: "blue.100" }}
+                                  borderRadius="md"
                                 />
                               </Table.Cell>
+                              <Table.Cell>
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  colorPalette="gray"
+                                  onClick={() => handleSeekToSegment(index)}
+                                  aria-label="Phát đoạn này"
+                                >
+                                  <Play size={14} fill="currentColor" />
+                                </Button>
+                              </Table.Cell>
                             </Table.Row>
-                          ))}
-                        </Table.Body>
-                      </Table.Root>
-                    </Box>
-                  )}
-                </Box>
-
-                {segments.length > 0 && currentSegment ? (
-                  <Box mt={2}>
-                    <Text fontSize="xs" color="gray.400">
-                      Đang phát: đoạn {activeIndex !== null ? activeIndex + 1 : "-"} / {segments.length}{" "}
-                      ({formatTimecode(currentTime)})
-                    </Text>
+                          );
+                        })}
+                      </Table.Body>
+                    </Table.Root>
                   </Box>
-                ) : null}
-              </Stack>
-            </Box>
-          </Flex>
-        </VStack>
-      </Box>
+                )}
+              </Card.Body>
+            </Card.Root>
+          </Stack>
+        </Grid>
+      </Container>
     </Box>
   );
 }

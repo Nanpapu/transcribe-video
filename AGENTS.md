@@ -1,5 +1,4 @@
 Môi trường của bạn chỉ được xài bash. Tất cả cmd, powershell đều ko dc
-ot defined`).
 
 ## 📝 Quy tắc comment trong code
 - Viết comment ngắn gọn, tập trung vào **lý do** hoặc bối cảnh khó hiểu; tránh mô tả những gì code đã thể hiện rõ.
