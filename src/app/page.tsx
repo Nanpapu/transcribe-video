@@ -225,8 +225,9 @@ export default function HomePage() {
       setActiveIndex(null);
       setCurrentTime(0);
       if (videoRef.current) videoRef.current.currentTime = 0;
-    } catch (err: any) {
-      setError(err.message || "Không thể gọi API transcribe.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : null;
+      setError(message && message.trim() ? message : "Không thể gọi API transcribe.");
     } finally {
       setIsTranscribing(false);
     }
@@ -469,13 +470,23 @@ export default function HomePage() {
               <Card.Header bg="white" borderBottomWidth="1px" borderColor="gray.100" py={4} px={6}>
                 <HStack justify="space-between">
                   <Card.Title fontSize="lg" fontWeight="semibold">Xem trước</Card.Title>
-                  <Field.Root orientation="horizontal" w="auto">
+                  <Field.Root orientation="horizontal" w="auto" gap={3}>
+                    <Field.Label
+                      htmlFor="subtitle-position"
+                      fontSize="xs"
+                      color="gray.600"
+                      fontWeight="medium"
+                    >
+                      Vị trí phụ đề
+                    </Field.Label>
                     <NativeSelect.Root size="xs" variant="subtle" width="140px">
                       <NativeSelect.Field
+                        id="subtitle-position"
                         value={subtitlePosition}
                         onChange={handlePositionChange}
                         fontSize="xs"
                         fontWeight="medium"
+                        aria-label="Chọn vị trí hiển thị phụ đề"
                       >
                         <option value="bottom">Dưới (Bottom)</option>
                         <option value="middle">Giữa (Middle)</option>
@@ -615,7 +626,8 @@ export default function HomePage() {
                       Chưa có dữ liệu phụ đề
                     </Text>
                     <Text fontSize="sm" maxW="xs" mt={2} color="gray.500" lineHeight="tall">
-                      Hãy tải video lên và nhấn "Bắt đầu Transcribe" để hệ thống tự động tạo phụ đề cho bạn.
+                      Hãy tải video lên và nhấn &quot;Bắt đầu Transcribe&quot; để hệ thống tự động tạo
+                      phụ đề cho bạn.
                     </Text>
                   </Flex>
                 ) : (
