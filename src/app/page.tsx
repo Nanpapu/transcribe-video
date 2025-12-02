@@ -29,6 +29,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [subtitlePosition, setSubtitlePosition] = useState<SubtitlePosition>("bottom");
   const [model, setModel] = useState<AsrModelId>(DEFAULT_ASR_MODEL);
+  const [fileDuration, setFileDuration] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
@@ -64,6 +65,7 @@ export default function HomePage() {
       if (prev) URL.revokeObjectURL(prev);
       return URL.createObjectURL(nextFile);
     });
+    setFileDuration(null);
   };
 
   const handleClearFile = () => {
@@ -77,6 +79,7 @@ export default function HomePage() {
       return null;
     });
     if (inputRef.current) inputRef.current.value = "";
+    setFileDuration(null);
   };
 
   const handleTranscribe = async () => {
@@ -234,6 +237,11 @@ export default function HomePage() {
     setActiveIndex(foundIndex >= 0 ? foundIndex : null);
   };
 
+  const handleLoadedMetadata = (event: SyntheticEvent<HTMLVideoElement>) => {
+    const duration = event.currentTarget.duration;
+    setFileDuration(Number.isFinite(duration) && duration > 0 ? duration : null);
+  };
+
   const handleSeekToSegment = (index: number) => {
     const target = segments[index];
     if (!target || !videoRef.current) return;
@@ -258,6 +266,7 @@ export default function HomePage() {
               onFileChange={handleFileChange}
               onClearFile={handleClearFile}
               onTranscribe={handleTranscribe}
+              fileDurationSeconds={fileDuration}
             />
 
             <VideoPreviewCard
@@ -266,6 +275,7 @@ export default function HomePage() {
               subtitlePosition={subtitlePosition}
               onSubtitlePositionChange={setSubtitlePosition}
               onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
               currentSegmentText={currentSegment?.text ?? null}
               currentTime={currentTime}
               totalSegments={segments.length}

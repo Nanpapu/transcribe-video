@@ -18,6 +18,7 @@ type VideoPreviewCardProps = {
   subtitlePosition: SubtitlePosition;
   onSubtitlePositionChange: (position: SubtitlePosition) => void;
   onTimeUpdate: (event: SyntheticEvent<HTMLVideoElement>) => void;
+  onLoadedMetadata: (event: SyntheticEvent<HTMLVideoElement>) => void;
   currentSegmentText: string | null;
   currentTime: number;
   totalSegments: number;
@@ -30,6 +31,7 @@ export function VideoPreviewCard({
   subtitlePosition,
   onSubtitlePositionChange,
   onTimeUpdate,
+  onLoadedMetadata,
   currentSegmentText,
   currentTime,
   totalSegments,
@@ -99,6 +101,7 @@ export function VideoPreviewCard({
               bg="black"
               objectFit="contain"
               onTimeUpdate={onTimeUpdate}
+              onLoadedMetadata={onLoadedMetadata}
             />
             {currentSegmentText && (
               <Box

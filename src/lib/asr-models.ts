@@ -2,34 +2,35 @@ export type AsrProviderId = "deepinfra" | "local";
 
 export type AsrModelId =
   | "openai/whisper-large-v3-turbo"
-  | "mistralai/Voxtral-Small-24B-2507"
+  | "openai/whisper-large-v3"
   | "local/whisper-large-v3-turbo";
+
+export const DEFAULT_ASR_MODEL: AsrModelId = "openai/whisper-large-v3-turbo";
+
+export const LOCAL_ASR_MODEL_ID = "local/whisper-large-v3-turbo";
 
 export type AsrModel = {
   id: AsrModelId;
   label: string;
   provider: AsrProviderId;
+  task: string;
+  pricePerMinuteUsd: number;
 };
-
-export const DEFAULT_ASR_MODEL: AsrModelId = "openai/whisper-large-v3-turbo";
-
-export const LOCAL_ASR_MODEL_ID: AsrModelId = "local/whisper-large-v3-turbo";
 
 export const ASR_MODELS: ReadonlyArray<AsrModel> = [
   {
     id: "openai/whisper-large-v3-turbo",
-    label: "Whisper Large V3 Turbo (OpenAI, DeepInfra)",
+    label: "Whisper Large V3 Turbo",
     provider: "deepinfra",
+    task: "automatic-speech-recognition",
+    pricePerMinuteUsd: 0.0002,
   },
   {
-    id: "mistralai/Voxtral-Small-24B-2507",
-    label: "Voxtral Small 24B 2507 (Mistral, DeepInfra)",
+    id: "openai/whisper-large-v3",
+    label: "Whisper Large V3",
     provider: "deepinfra",
-  },
-  {
-    id: "local/whisper-large-v3-turbo",
-    label: "Whisper Large V3 Turbo (Tự host - miễn phí)",
-    provider: "local",
+    task: "automatic-speech-recognition",
+    pricePerMinuteUsd: 0.00045,
   },
 ];
 
