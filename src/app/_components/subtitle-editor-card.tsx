@@ -21,6 +21,7 @@ type SubtitleEditorCardProps = {
   error: string | null;
   activeIndex: number | null;
   isTranslating?: boolean;
+  onTranslateClick?: () => void;
   onDownloadSrt: () => void;
   onTimeChange: (
     index: number,
@@ -37,6 +38,7 @@ export function SubtitleEditorCard({
   error,
   activeIndex,
   isTranslating = false,
+  onTranslateClick,
   onDownloadSrt,
   onTimeChange,
   onTimeBlur,
@@ -91,16 +93,30 @@ export function SubtitleEditorCard({
               </Badge>
             )}
           </HStack>
-          <Button
-            size="sm"
-            variant="outline"
-            colorPalette="gray"
-            disabled={!segments.length}
-            onClick={onDownloadSrt}
-            fontWeight="medium"
-          >
-            <Download size={16} style={{ marginRight: 6 }} /> Tải file SRT
-          </Button>
+          <HStack gap={3}>
+            {onTranslateClick && (
+              <Button
+                size="sm"
+                variant="outline"
+                colorPalette="blue"
+                disabled={!segments.length || isTranslating}
+                onClick={onTranslateClick}
+                fontWeight="medium"
+              >
+                Dịch lại
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              colorPalette="gray"
+              disabled={!segments.length}
+              onClick={onDownloadSrt}
+              fontWeight="medium"
+            >
+              <Download size={16} style={{ marginRight: 6 }} /> Tải file SRT
+            </Button>
+          </HStack>
         </HStack>
       </Card.Header>
 

@@ -40,7 +40,7 @@ async function callGeminiWithRetry(payload: TranslateRequestBody): Promise<Trans
     apiKey,
   });
 
-  const modelId = getEnv("GEMINI_MODEL_ID") ?? "gemini-2.0-flash-exp";
+  const modelId = getEnv("GEMINI_MODEL_ID") ?? "gemini-2.5-flash";
 
   const inputJson = JSON.stringify(payload.items);
 
@@ -75,7 +75,7 @@ async function callGeminiWithRetry(payload: TranslateRequestBody): Promise<Trans
     try {
       const response = await client.models.generateContentStream({
         model: modelId,
-        config: {
+                config: {
           thinkingConfig: {
             thinkingBudget: 256,
           },
@@ -121,6 +121,16 @@ async function callGeminiWithRetry(payload: TranslateRequestBody): Promise<Trans
       return items;
     } catch (error: unknown) {
       lastError = error;
+
+      if (
+        error instanceof Error &&
+        (error.message.includes("INVALID_ARGUMENT") ||
+          error.message.includes("not supported by this model") ||
+          error.message.includes("400"))
+      ) {
+        break;
+      }
+
       const delayMs = Math.min(5000, 1000 * (attempt + 1));
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
@@ -208,4 +218,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

@@ -10,6 +10,7 @@ import {
   type SubtitlePosition,
   type EditableTranscriptSegment,
   type TranscriptResponse,
+  type TranscriptSegment,
 } from "@/lib/transcript";
 import { DEFAULT_ASR_MODEL, type AsrModelId } from "@/lib/asr-models";
 import { translateSegmentsToVietnamese } from "@/lib/translate-client";
@@ -90,6 +91,44 @@ export default function HomePage() {
     if (inputRef.current) inputRef.current.value = "";
     setFileDuration(null);
     setActualCostUsd(null);
+  };
+
+  const handleTranslateSegments = async (sourceSegments?: EditableSegment[]) => {
+    const segmentsToUse = sourceSegments ?? segments;
+    if (!segmentsToUse.length) return;
+
+    console.log("[ui] translate:start", {
+      segmentCount: segmentsToUse.length,
+    });
+
+    const payloadSegments: TranscriptSegment[] = segmentsToUse.map((segment) => ({
+      id: segment.id,
+      start: segment.start,
+      end: segment.end,
+      text: segment.text,
+    }));
+
+    setIsTranslating(true);
+    try {
+      const translatedMap = await translateSegmentsToVietnamese(payloadSegments);
+      if (translatedMap.size) {
+        setSegments((prev) =>
+          prev.map((segment) => ({
+            ...segment,
+            text: translatedMap.get(segment.id) ?? segment.text,
+          })),
+        );
+        console.log("[ui] translate:done", {
+          translatedCount: translatedMap.size,
+        });
+      } else {
+        console.warn("[ui] translate:empty-map");
+      }
+    } catch (translateError) {
+      console.error("[ui] translate:exception", translateError);
+    } finally {
+      setIsTranslating(false);
+    }
   };
 
   const handleTranscribe = async () => {
@@ -177,30 +216,7 @@ export default function HomePage() {
       );
 
       if (shouldTranslate && baseSegments.length) {
-        console.log("[ui] translate:start", {
-          segmentCount: baseSegments.length,
-        });
-        setIsTranslating(true);
-        try {
-          const translatedMap = await translateSegmentsToVietnamese(baseSegments);
-          if (translatedMap.size) {
-            setSegments((prev) =>
-              prev.map((segment) => ({
-                ...segment,
-                text: translatedMap.get(segment.id) ?? segment.text,
-              })),
-            );
-            console.log("[ui] translate:done", {
-              translatedCount: translatedMap.size,
-            });
-          } else {
-            console.warn("[ui] translate:empty-map");
-          }
-        } catch (translateError) {
-          console.error("[ui] translate:exception", translateError);
-        } finally {
-          setIsTranslating(false);
-        }
+        await handleTranslateSegments(mappedSegments);
       }
     } catch (err: unknown) {
       console.error("[ui] transcribe:exception", err);
@@ -405,6 +421,9 @@ export default function HomePage() {
                     onTextChange={handleTextChange}
                     onSeekToSegment={handleSeekToSegment}
                     isTranslating={isTranslating}
+                    onTranslateClick={
+                      shouldTranslate ? () => void handleTranslateSegments() : undefined
+                    }
                   />
                 </Stack>
               </Grid>
