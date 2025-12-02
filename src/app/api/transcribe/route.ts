@@ -394,6 +394,7 @@ export async function POST(request: Request) {
     }
 
     const data = (await response.json()) as DeepInfraWhisperResponse;
+    console.log("[api/transcribe] deepinfra-raw-response", data);
 
     let segmentsFromResponse: DeepInfraSegment[] = Array.isArray(data.segments)
       ? data.segments
@@ -425,28 +426,43 @@ export async function POST(request: Request) {
       Array.isArray(data.words) && data.words.length ? data.words : wordsFromSegments,
     );
     const rawSegments = segmentsFromResponse;
-    const syntheticWords =
-      wordCandidates.length > 0 ? [] : synthesizeWordTimestampsFromSegments(rawSegments);
-    const syntheticWordSegments = buildSegmentsFromWords(syntheticWords);
-    const wordSegments = buildSegmentsFromWords(wordCandidates);
 
-    const baseSegments: TranscriptSegment[] = wordSegments.length
-      ? wordSegments
-      : syntheticWordSegments.length
-        ? syntheticWordSegments
-        : rawSegments.map((segment, index) => ({
-            id: typeof segment?.id === "number" ? segment.id : index,
-            start: Number.isFinite(segment?.start ?? NaN) ? (segment?.start as number) : 0,
-            end: Number.isFinite(segment?.end ?? NaN) ? (segment?.end as number) : 0,
-            text: typeof segment?.text === "string" ? segment.text : "",
-        }));
+    const segmentModeRaw = (getEnv("SRT_SEGMENT_MODE") ?? "segments").toLowerCase();
+    const useWordBasedSegments = segmentModeRaw === "words";
 
-    const segments: TranscriptSegment[] = baseSegments.map((segment, index) => ({
-      id: typeof segment.id === "number" ? segment.id : index,
-      start: Number.isFinite(segment.start) ? segment.start : 0,
-      end: Number.isFinite(segment.end) ? segment.end : 0,
-      text: typeof segment.text === "string" ? segment.text : "",
-    }));
+    let segments: TranscriptSegment[];
+
+    if (useWordBasedSegments) {
+      const syntheticWords =
+        wordCandidates.length > 0 ? [] : synthesizeWordTimestampsFromSegments(rawSegments);
+      const syntheticWordSegments = buildSegmentsFromWords(syntheticWords);
+      const wordSegments = buildSegmentsFromWords(wordCandidates);
+
+      const baseSegments: TranscriptSegment[] = wordSegments.length
+        ? wordSegments
+        : syntheticWordSegments.length
+          ? syntheticWordSegments
+          : rawSegments.map((segment, index) => ({
+              id: typeof segment?.id === "number" ? segment.id : index,
+              start: Number.isFinite(segment?.start ?? NaN) ? (segment?.start as number) : 0,
+              end: Number.isFinite(segment?.end ?? NaN) ? (segment?.end as number) : 0,
+              text: typeof segment?.text === "string" ? segment.text : "",
+          }));
+
+      segments = baseSegments.map((segment, index) => ({
+        id: typeof segment.id === "number" ? segment.id : index,
+        start: Number.isFinite(segment.start) ? segment.start : 0,
+        end: Number.isFinite(segment.end) ? segment.end : 0,
+        text: typeof segment.text === "string" ? segment.text : "",
+      }));
+    } else {
+      segments = rawSegments.map((segment, index) => ({
+        id: typeof segment?.id === "number" ? segment.id : index,
+        start: Number.isFinite(segment?.start ?? NaN) ? (segment?.start as number) : 0,
+        end: Number.isFinite(segment?.end ?? NaN) ? (segment?.end as number) : 0,
+        text: typeof segment?.text === "string" ? segment.text : "",
+      }));
+    }
 
     console.log("[api/transcribe] success", {
       model: deepInfraModel,
@@ -454,11 +470,17 @@ export async function POST(request: Request) {
       chunkLength,
       wordCount: wordCandidates.length,
       segmentCount: segments.length,
+      segmentMode: useWordBasedSegments ? "words" : "segments",
     });
 
     const payload: TranscriptResponse = {
       text: typeof data.text === "string" ? data.text : "",
       segments,
+      costUsd:
+        typeof data.inference_status?.cost === "number" &&
+        Number.isFinite(data.inference_status.cost)
+          ? data.inference_status.cost
+          : null,
     };
 
     return NextResponse.json(payload);

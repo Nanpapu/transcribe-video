@@ -33,6 +33,7 @@ export default function HomePage() {
   const [model, setModel] = useState<AsrModelId>(DEFAULT_ASR_MODEL);
   const [language, setLanguage] = useState<AsrLanguage>("auto");
   const [fileDuration, setFileDuration] = useState<number | null>(null);
+  const [actualCostUsd, setActualCostUsd] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
@@ -69,6 +70,7 @@ export default function HomePage() {
       return URL.createObjectURL(nextFile);
     });
     setFileDuration(null);
+    setActualCostUsd(null);
   };
 
   const handleClearFile = () => {
@@ -83,6 +85,7 @@ export default function HomePage() {
     });
     if (inputRef.current) inputRef.current.value = "";
     setFileDuration(null);
+    setActualCostUsd(null);
   };
 
   const handleTranscribe = async () => {
@@ -138,6 +141,7 @@ export default function HomePage() {
       console.log("[ui] transcribe:data", {
         textLength: data.text?.length ?? 0,
         segments: data.segments?.length ?? 0,
+        costUsd: data.costUsd ?? null,
       });
       const mappedSegments: EditableSegment[] = (data.segments ?? []).map((segment) => ({
         ...segment,
@@ -161,6 +165,11 @@ export default function HomePage() {
       setActiveIndex(null);
       setCurrentTime(0);
       if (videoRef.current) videoRef.current.currentTime = 0;
+      setActualCostUsd(
+        typeof data.costUsd === "number" && Number.isFinite(data.costUsd)
+          ? data.costUsd
+          : null,
+      );
     } catch (err: unknown) {
       console.error("[ui] transcribe:exception", err);
       if (err instanceof DOMException && err.name === "AbortError") {
@@ -275,6 +284,7 @@ export default function HomePage() {
               onClearFile={handleClearFile}
               onTranscribe={handleTranscribe}
               fileDurationSeconds={fileDuration}
+              actualCostUsd={actualCostUsd}
             />
 
             <VideoPreviewCard

@@ -8,6 +8,7 @@ export type TranscriptSegment = {
 export type TranscriptResponse = {
   text: string;
   segments: TranscriptSegment[];
+  costUsd?: number | null;
 };
 
 export type EditableTranscriptSegment = TranscriptSegment & {

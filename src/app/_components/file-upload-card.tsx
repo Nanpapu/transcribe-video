@@ -37,6 +37,7 @@ type FileUploadCardProps = {
   onClearFile: () => void;
   onTranscribe: () => void;
   fileDurationSeconds: number | null;
+  actualCostUsd: number | null;
 };
 
 export function FileUploadCard({
@@ -51,6 +52,7 @@ export function FileUploadCard({
   onClearFile,
   onTranscribe,
   fileDurationSeconds,
+  actualCostUsd,
 }: FileUploadCardProps) {
   const deepInfraModels = ASR_MODELS.filter((item) => item.provider === "deepinfra");
   const usdToVndRate = 27300;
@@ -96,6 +98,11 @@ export function FileUploadCard({
     ? selectedModel.pricePerMinuteUsd * (fileDurationSeconds / 60)
     : null;
   const estimatedCostVnd = estimatedCostUsd !== null ? estimatedCostUsd * usdToVndRate : null;
+  const hasActualCost =
+    typeof actualCostUsd === "number" && Number.isFinite(actualCostUsd) && actualCostUsd > 0;
+  const displayCostUsd = hasActualCost ? actualCostUsd : estimatedCostUsd;
+  const displayCostVnd =
+    displayCostUsd !== null ? displayCostUsd * usdToVndRate : estimatedCostVnd;
 
   return (
     <Card.Root variant="elevated" shadow="md" borderRadius="xl" overflow="hidden">
@@ -261,7 +268,7 @@ export function FileUploadCard({
               <Text fontSize="xs" color="gray.500" mt={1} mb={3}>
                 Tỷ giá 1 USD = 27,300 VND
               </Text>
-              {estimatedCostUsd !== null && fileDurationSeconds !== null && (
+              {displayCostUsd !== null && (
                 <Box
                   p={3}
                   borderWidth="1px"
@@ -271,13 +278,17 @@ export function FileUploadCard({
                   mb={4}
                 >
                   <Text fontSize="xs" color="gray.600">
-                    Chi phí ước tính ({formatDurationLabel(fileDurationSeconds)}):
+                    {hasActualCost
+                      ? "Chi phí thực tế (DeepInfra):"
+                      : fileDurationSeconds !== null
+                        ? `Chi phí ước tính (${formatDurationLabel(fileDurationSeconds)}):`
+                        : "Chi phí ước tính:"}
                   </Text>
                   <Text fontSize="lg" fontWeight="semibold" mt={1}>
-                    {formatUsdAmount(estimatedCostUsd)}
+                    {formatUsdAmount(displayCostUsd)}
                   </Text>
                   <Text fontSize="xs" color="gray.500">
-                    ~{formatVndAmount(estimatedCostVnd ?? 0)}
+                    ~{formatVndAmount(displayCostVnd ?? 0)}
                   </Text>
                 </Box>
               )}
