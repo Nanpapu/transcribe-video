@@ -248,6 +248,16 @@ export async function POST(request: Request) {
     getEnv("DEEPINFRA_WEBHOOK");
 
   try {
+    console.log("[api/transcribe] incoming", {
+      model,
+      task,
+      chunkLevel,
+      chunkLength,
+      hasLanguage: !!language,
+      hasInitialPrompt: !!initialPrompt,
+      hasWebhook: !!webhook,
+    });
+
     const audioBuffer = Buffer.from(await audioFile.arrayBuffer());
 
     type ExtendedAsrRequest = AutomaticSpeechRecognitionRequest & {
@@ -313,6 +323,14 @@ export async function POST(request: Request) {
       text: typeof segment.text === "string" ? segment.text : "",
     }));
 
+    console.log("[api/transcribe] success", {
+      model,
+      chunkLevel,
+      chunkLength,
+      wordCount: wordCandidates.length,
+      segmentCount: segments.length,
+    });
+
     const payload: TranscriptResponse = {
       text: typeof data.text === "string" ? data.text : "",
       segments,
@@ -320,6 +338,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(payload);
   } catch (error: unknown) {
+    console.error("[api/transcribe] error", error);
     const message =
       pickString(error, "message") ??
       (error instanceof Error && error.message ? error.message : null) ??

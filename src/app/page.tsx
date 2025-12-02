@@ -48,6 +48,11 @@ export default function HomePage() {
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextFile = event.target.files?.[0] ?? null;
+    console.log("[ui] file change", {
+      hasFile: !!nextFile,
+      name: nextFile?.name,
+      size: nextFile?.size,
+    });
     if (!nextFile) {
       handleClearFile();
       return;
@@ -80,10 +85,22 @@ export default function HomePage() {
       return;
     }
 
+    console.log("[ui] transcribe:start", {
+      fileName: file.name,
+      fileSize: file.size,
+      model,
+    });
+
     setIsTranscribing(true);
     setError(null);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => {
+        console.warn("[ui] transcribe:abort-timeout");
+        controller.abort();
+      }, 120000);
+
       const body = new FormData();
       body.append("file", file);
       body.append("model", model);
@@ -91,14 +108,28 @@ export default function HomePage() {
       const response = await fetch("/api/transcribe", {
         method: "POST",
         body,
+        signal: controller.signal,
+      });
+
+      window.clearTimeout(timeoutId);
+
+      console.log("[ui] transcribe:response", {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
       });
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        console.warn("[ui] transcribe:error-payload", payload);
         throw new Error(payload?.error ?? "Lỗi khi xử lý transcribe.");
       }
 
       const data = (await response.json()) as TranscriptResponse;
+      console.log("[ui] transcribe:data", {
+        textLength: data.text?.length ?? 0,
+        segments: data.segments?.length ?? 0,
+      });
       const mappedSegments: EditableSegment[] = (data.segments ?? []).map((segment) => ({
         ...segment,
         startTimecode: formatTimecode(segment.start),
@@ -110,6 +141,7 @@ export default function HomePage() {
         setActiveIndex(null);
         setCurrentTime(0);
         if (videoRef.current) videoRef.current.currentTime = 0;
+        console.warn("[ui] transcribe:empty-segments");
         setError(
           "API không trả về timestamp theo đoạn. Kiểm tra cấu hình DeepInfra (chunk_level=segment, chunk_length_s).",
         );
@@ -121,9 +153,15 @@ export default function HomePage() {
       setCurrentTime(0);
       if (videoRef.current) videoRef.current.currentTime = 0;
     } catch (err: unknown) {
+      console.error("[ui] transcribe:exception", err);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Request transcribe mất quá lâu, vui lòng thử lại sau.");
+        return;
+      }
       const message = err instanceof Error ? err.message : null;
       setError(message && message.trim() ? message : "Không thể gọi API transcribe.");
     } finally {
+      console.log("[ui] transcribe:done");
       setIsTranscribing(false);
     }
   };
