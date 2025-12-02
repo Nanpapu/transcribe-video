@@ -517,11 +517,14 @@ export default function HomePage() {
                   >
                     {videoUrl ? (
                       <>
-                        <video
+                        <Box
+                          as="video"
                           ref={videoRef}
                           src={videoUrl}
                           controls
-                          className="video-player"
+                          w="100%"
+                          h="auto"
+                          display="block"
                           onTimeUpdate={handleTimeUpdate}
                         />
                         {currentSegment ? (
