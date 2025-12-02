@@ -378,17 +378,17 @@ export default function HomePage() {
   })();
 
   return (
-    <Box minH="100vh" bg="gray.950" color="gray.50">
+    <Box minH="100vh" bg="gray.50" color="gray.900">
       <Box maxW="1120px" mx="auto" px={{ base: 4, md: 6 }} py={{ base: 6, md: 10 }}>
-        <VStack align="stretch" gap={4}>
+        <VStack align="stretch" gap={5}>
           <Box>
-            <Text fontSize="sm" color="gray.400" textTransform="uppercase" letterSpacing="0.12em">
+            <Text fontSize="sm" color="gray.500" textTransform="uppercase" letterSpacing="0.12em">
               Subtitle tool
             </Text>
             <Text fontSize="2xl" fontWeight="semibold" mt={1}>
               Transcribe video, chỉnh sửa sub, xuất SRT
             </Text>
-            <Text fontSize="sm" color="gray.400" mt={2} maxW="640px">
+            <Text fontSize="sm" color="gray.600" mt={2} maxW="640px">
               Chọn file video hoặc âm thanh, gửi đi transcribe, sau đó chỉnh sửa timecode và nội dung
               sub. Subtitle overlay mặc định nền vàng, chữ đen giống CapCut.
             </Text>
@@ -401,20 +401,21 @@ export default function HomePage() {
             align="stretch"
           >
             <Box
-              flex="1"
+              flex={{ base: "1", lg: "3" }}
               borderWidth="1px"
-              borderColor="gray.800"
+              borderColor="gray.200"
               borderRadius="xl"
-              bg="gray.900"
+              bg="white"
               p={4}
+              boxShadow="sm"
             >
               <Stack gap={4}>
                 <Box
                   borderWidth="1px"
                   borderStyle="dashed"
-                  borderColor="gray.700"
+                  borderColor="gray.300"
                   borderRadius="xl"
-                  bg="gray.900"
+                  bg="gray.50"
                   px={4}
                   py={6}
                   cursor="pointer"
@@ -425,7 +426,7 @@ export default function HomePage() {
                       w={12}
                       h={12}
                       borderRadius="full"
-                      bg="gray.800"
+                      bg="gray.100"
                       display="flex"
                       alignItems="center"
                       justifyContent="center"
@@ -435,12 +436,12 @@ export default function HomePage() {
                     <Text fontWeight="medium">
                       {file ? "Đã chọn file, bấm Transcribe để xử lý" : "Nhấn để chọn video / audio"}
                     </Text>
-                    <Text fontSize="xs" color="gray.400">
+                    <Text fontSize="xs" color="gray.500">
                       Hỗ trợ video và âm thanh phổ biến. Thời lượng càng dài thì thời gian xử lý càng
                       lâu.
                     </Text>
                     {file ? (
-                      <Text fontSize="xs" color="gray.300">
+                      <Text fontSize="xs" color="gray.600">
                         File hiện tại: {file.name}
                       </Text>
                     ) : null}
@@ -504,7 +505,7 @@ export default function HomePage() {
                 </Field.Root>
 
                 <Box mt={2}>
-                  <Text fontSize="sm" mb={2}>
+                  <Text fontSize="sm" mb={2} color="gray.700">
                     Preview video kèm subtitle
                   </Text>
                   <Box
@@ -552,7 +553,7 @@ export default function HomePage() {
                         px={4}
                         py={6}
                       >
-                        <Text fontSize="sm" color="gray.500">
+                        <Text fontSize="sm" color="gray.500" textAlign="center">
                           Chọn file để xem preview video và subtitle.
                         </Text>
                       </Flex>
@@ -563,27 +564,34 @@ export default function HomePage() {
             </Box>
 
             <Box
-              flex="1"
+              flex={{ base: "1", lg: "2" }}
               borderWidth="1px"
-              borderColor="gray.800"
+              borderColor="gray.200"
               borderRadius="xl"
-              bg="gray.900"
+              bg="white"
               p={4}
+              boxShadow="sm"
             >
               <Stack gap={3} h="100%">
                 <HStack justify="space-between" align="center">
                   <Text fontWeight="medium">Subtitle segments</Text>
-                  <Text fontSize="xs" color="gray.400">
+                  <Text fontSize="xs" color="gray.500">
                     Tổng: {segments.length} đoạn
                   </Text>
                 </HStack>
 
                 {error ? (
-                  <Alert.Root borderStartWidth="4px" borderStartColor="red.500">
+                  <Alert.Root
+                    borderStartWidth="4px"
+                    borderStartColor="red.400"
+                    bg="red.50"
+                  >
                     <Alert.Indicator />
                     <Alert.Content>
-                      <Alert.Title>Lỗi</Alert.Title>
-                      <Alert.Description fontSize="sm">{error}</Alert.Description>
+                      <Alert.Title color="red.800">Lỗi</Alert.Title>
+                      <Alert.Description fontSize="sm" color="red.800">
+                        {error}
+                      </Alert.Description>
                     </Alert.Content>
                   </Alert.Root>
                 ) : null}
@@ -592,9 +600,9 @@ export default function HomePage() {
                   flex="1"
                   borderRadius="lg"
                   borderWidth="1px"
-                  borderColor="gray.800"
+                  borderColor="gray.200"
                   overflow="hidden"
-                  bg="gray.950"
+                  bg="white"
                 >
                   {segments.length === 0 ? (
                     <Flex
@@ -613,7 +621,7 @@ export default function HomePage() {
                   ) : (
                     <Box maxH="420px" overflowY="auto">
                       <Table.Root size="sm" variant="line">
-                        <Table.Header position="sticky" top={0} bg="gray.950" zIndex={1}>
+                        <Table.Header position="sticky" top={0} bg="gray.50" zIndex={1}>
                           <Table.Row>
                             <Table.ColumnHeader w="48px">#</Table.ColumnHeader>
                             <Table.ColumnHeader w="152px">Start</Table.ColumnHeader>
@@ -625,11 +633,11 @@ export default function HomePage() {
                           {segments.map((segment, index) => (
                             <Table.Row
                               key={segment.id ?? index}
-                              bg={index === activeIndex ? "yellow.900" : "transparent"}
-                              _hover={{ bg: "gray.900", cursor: "pointer" }}
+                              bg={index === activeIndex ? "yellow.50" : "transparent"}
+                              _hover={{ bg: "gray.50", cursor: "pointer" }}
                               onClick={() => handleSeekToSegment(index)}
                             >
-                              <Table.Cell fontSize="xs" color="gray.400">
+                              <Table.Cell fontSize="xs" color="gray.500">
                                 {index + 1}
                               </Table.Cell>
                               <Table.Cell>
