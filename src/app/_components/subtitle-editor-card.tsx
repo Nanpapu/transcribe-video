@@ -12,6 +12,7 @@ import {
   Textarea,
   VStack,
 } from "@chakra-ui/react";
+import { type ChangeEvent, useEffect, useRef } from "react";
 import { AlertCircle, Play, Type, Download } from "lucide-react";
 import type { EditableTranscriptSegment } from "@/lib/transcript";
 
@@ -40,12 +41,35 @@ export function SubtitleEditorCard({
   onTextChange,
   onSeekToSegment,
 }: SubtitleEditorCardProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
+
+  useEffect(() => {
+    if (activeIndex === null || activeIndex < 0) return;
+    const container = containerRef.current;
+    const row = rowRefs.current[activeIndex] ?? null;
+    if (!container || !row) return;
+
+    const offsetTop = row.offsetTop - container.offsetTop;
+    container.scrollTo({
+      top: offsetTop,
+      behavior: "smooth",
+    });
+  }, [activeIndex]);
+
+  const handleTextChange = (index: number, event: ChangeEvent<HTMLTextAreaElement>) => {
+    const element = event.currentTarget;
+    element.style.height = "auto";
+    element.style.height = `${element.scrollHeight}px`;
+    onTextChange(index, element.value);
+  };
+
   return (
     <Card.Root
       variant="elevated"
       shadow="md"
       borderRadius="xl"
-      h="full"
+      h="calc(100vh - 120px)"
       display="flex"
       flexDirection="column"
       overflow="hidden"
@@ -101,10 +125,10 @@ export function SubtitleEditorCard({
             align="center"
             justify="center"
             flex="1"
-            p={10}
+            py={10}
+            px={8}
             color="gray.400"
             textAlign="center"
-            minH="400px"
           >
             <Flex p={6} bg="gray.50" borderRadius="full" mb={6} justify="center" align="center">
               <Type size={40} className="text-gray-300" />
@@ -118,7 +142,12 @@ export function SubtitleEditorCard({
             </Text>
           </Flex>
         ) : (
-          <Box overflowY="auto" flex="1" className="custom-scrollbar">
+          <Box
+            ref={containerRef}
+            overflowY="auto"
+            flex="1"
+            className="custom-scrollbar"
+          >
             <Table.Root size="sm" stickyHeader interactive>
               <Table.Header>
                 <Table.Row bg="gray.50">
@@ -138,8 +167,13 @@ export function SubtitleEditorCard({
                   return (
                     <Table.Row
                       key={segment.id ?? index}
+                      ref={(el) => {
+                        rowRefs.current[index] = el;
+                      }}
                       bg={isActive ? "blue.50" : undefined}
                       _hover={{ bg: isActive ? "blue.100" : "gray.50" }}
+                      borderLeftWidth={isActive ? "3px" : "1px"}
+                      borderLeftColor={isActive ? "blue.500" : "transparent"}
                       transition="background 0.1s"
                     >
                       <Table.Cell
@@ -190,13 +224,17 @@ export function SubtitleEditorCard({
                         <Textarea
                           size="sm"
                           variant="outline"
-                          resize="vertical"
-                          rows={2}
+                          resize="none"
                           value={segment.text}
-                          onChange={(event) => onTextChange(index, event.target.value)}
+                          onChange={(event) => handleTextChange(index, event)}
                           bg="white"
-                          borderColor={isActive ? "blue.200" : "gray.200"}
-                          _focus={{ borderColor: "blue.500", ring: "2px", ringColor: "blue.100" }}
+                          borderColor={isActive ? "blue.400" : "gray.200"}
+                          fontWeight={isActive ? "semibold" : "normal"}
+                          _focus={{
+                            borderColor: "blue.500",
+                            ring: "2px",
+                            ringColor: "blue.100",
+                          }}
                           borderRadius="md"
                         />
                       </Table.Cell>
@@ -222,4 +260,3 @@ export function SubtitleEditorCard({
     </Card.Root>
   );
 }
-

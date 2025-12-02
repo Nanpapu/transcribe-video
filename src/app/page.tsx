@@ -303,16 +303,18 @@ export default function HomePage() {
 
           {/* Right Column: Editor */}
           <Stack gap={6} h="full">
-            <SubtitleEditorCard
-              segments={segments}
-              error={error}
-              activeIndex={activeIndex}
-              onDownloadSrt={handleDownloadSrt}
-              onTimeChange={handleTimeChange}
-              onTimeBlur={handleTimeBlur}
-              onTextChange={handleTextChange}
-              onSeekToSegment={handleSeekToSegment}
-            />
+            <Box position="sticky" top="96px">
+              <SubtitleEditorCard
+                segments={segments}
+                error={error}
+                activeIndex={activeIndex}
+                onDownloadSrt={handleDownloadSrt}
+                onTimeChange={handleTimeChange}
+                onTimeBlur={handleTimeBlur}
+                onTextChange={handleTextChange}
+                onSeekToSegment={handleSeekToSegment}
+              />
+            </Box>
           </Stack>
         </Grid>
       </Container>
