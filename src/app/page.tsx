@@ -28,6 +28,7 @@ import {
   Text,
   Textarea,
   VStack,
+  chakra,
 } from "@chakra-ui/react";
 import {
   AlertCircle,
@@ -477,10 +478,9 @@ export default function HomePage() {
               <Card.Body p={0} position="relative" bg="black">
                 {videoUrl ? (
                   <Box position="relative">
-                    <Box
-                      as="video"
+                    <chakra.video
                       ref={videoRef}
-                      src={videoUrl}
+                      src={videoUrl ?? undefined}
                       controls
                       w="100%"
                       h="auto"
