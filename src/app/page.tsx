@@ -1,4 +1,3 @@
-/* eslint-disable react/jsx-no-useless-fragment */
 "use client";
 
 import {
@@ -187,7 +186,6 @@ export default function HomePage() {
     });
 
     if (inputRef.current) {
-      // eslint-disable-next-line no-param-reassign
       inputRef.current.value = "";
     }
   };
@@ -236,7 +234,7 @@ export default function HomePage() {
       if (videoRef.current) {
         videoRef.current.currentTime = 0;
       }
-    } catch (exception) {
+    } catch {
       setError("Không thể gọi API transcribe. Kiểm tra server hoặc cấu hình lại sau.");
     } finally {
       setIsTranscribing(false);
@@ -481,8 +479,9 @@ export default function HomePage() {
                     variant="outline"
                     onClick={handleDownloadSrt}
                     disabled={!segments.length}
+                    gap={1.5}
                   >
-                    <Download size={16} style={{ marginRight: 6 }} />
+                    <Download size={16} />
                     Tải SRT
                   </Button>
                 </HStack>
@@ -490,7 +489,12 @@ export default function HomePage() {
                 <Field.Root>
                   <Field.Label fontSize="sm">Vị trí subtitle trên video</Field.Label>
                   <NativeSelect.Root size="sm" maxW="220px" mt={2}>
-                    <NativeSelect.Field value={subtitlePosition} onChange={handlePositionChange}>
+                    <NativeSelect.Field
+                      aria-label="Vị trí subtitle trên video"
+                      title="Vị trí subtitle trên video"
+                      value={subtitlePosition}
+                      onChange={handlePositionChange}
+                    >
                       <option value="bottom">Dưới (mặc định)</option>
                       <option value="middle">Giữa khung hình</option>
                       <option value="top">Trên cùng</option>
@@ -516,7 +520,7 @@ export default function HomePage() {
                           ref={videoRef}
                           src={videoUrl}
                           controls
-                          style={{ width: "100%", height: "auto", display: "block" }}
+                          className="video-player"
                           onTimeUpdate={handleTimeUpdate}
                         />
                         {currentSegment ? (

@@ -35,6 +35,12 @@ a {
   text-decoration: none;
 }
 
+.video-player {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
 @media (prefers-color-scheme: dark) {
   html {
     color-scheme: dark;
