@@ -20,6 +20,7 @@ type SubtitleEditorCardProps = {
   segments: EditableTranscriptSegment[];
   error: string | null;
   activeIndex: number | null;
+  isTranslating?: boolean;
   onDownloadSrt: () => void;
   onTimeChange: (
     index: number,
@@ -35,6 +36,7 @@ export function SubtitleEditorCard({
   segments,
   error,
   activeIndex,
+  isTranslating = false,
   onDownloadSrt,
   onTimeChange,
   onTimeBlur,
@@ -83,6 +85,11 @@ export function SubtitleEditorCard({
             <Badge variant="surface" colorPalette="blue" px={2} borderRadius="full">
               {segments.length}
             </Badge>
+            {isTranslating && (
+              <Badge variant="surface" colorPalette="orange" px={2} borderRadius="full">
+                Đang dịch...
+              </Badge>
+            )}
           </HStack>
           <Button
             size="sm"

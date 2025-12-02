@@ -19,10 +19,11 @@ import JSZip from "jszip";
 
 import { ASR_MODELS, DEFAULT_ASR_MODEL, type AsrModelId } from "@/lib/asr-models";
 import { segmentsToSrt, type TranscriptResponse } from "@/lib/transcript";
+import { translateSegmentsToVietnamese } from "@/lib/translate-client";
 
 type AsrLanguage = "auto" | "zh" | "ko" | "en" | "ja" | "vi";
 
-type BatchJobStatus = "pending" | "processing" | "done" | "error";
+type BatchJobStatus = "pending" | "processing" | "translating" | "done" | "error";
 
 type BatchJob = {
   id: string;
@@ -37,6 +38,10 @@ type BatchJob = {
 };
 
 const USD_TO_VND_RATE = 27300;
+
+type BatchTranscribeCardProps = {
+  translateEnabled: boolean;
+};
 
 function formatSizeMb(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 MB";
@@ -77,7 +82,7 @@ function getBaseName(fileName: string): string {
   return trimmed.slice(0, dotIndex);
 }
 
-export function BatchTranscribeCard() {
+export function BatchTranscribeCard({ translateEnabled }: BatchTranscribeCardProps) {
   const [jobs, setJobs] = useState<BatchJob[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [model, setModel] = useState<AsrModelId>(DEFAULT_ASR_MODEL);
@@ -212,9 +217,8 @@ export function BatchTranscribeCard() {
                 ),
               );
             } else {
-              const data = (await response.json()) as TranscriptResponse;
-              const segments = data.segments ?? [];
-              const srtContent = segmentsToSrt(segments);
+            const data = (await response.json()) as TranscriptResponse;
+            const segments = data.segments ?? [];
               const durationSeconds =
                 segments.length > 0
                   ? Math.max(
@@ -223,28 +227,93 @@ export function BatchTranscribeCard() {
                         (segments[0]?.start ?? 0),
                     )
                   : null;
-              const costUsd =
-                typeof data.costUsd === "number" &&
-                Number.isFinite(data.costUsd)
+            const costUsd =
+              typeof data.costUsd === "number" &&
+              Number.isFinite(data.costUsd)
                   ? data.costUsd
                   : null;
 
               if (!isMountedRef.current) return;
 
-              setJobs((prev) =>
-                prev.map((item, idx) =>
-                  idx === jobIndex
-                    ? {
-                        ...item,
-                        status: "done",
-                        errorMessage: null,
-                        srtContent,
-                        durationSeconds,
-                        costUsd,
-                      }
-                    : item,
-                ),
-              );
+              if (translateEnabled && segments.length) {
+                setJobs((prev) =>
+                  prev.map((item, idx) =>
+                    idx === jobIndex
+                      ? {
+                          ...item,
+                          status: "translating",
+                          errorMessage: null,
+                        }
+                      : item,
+                  ),
+                );
+
+                try {
+                  const translatedMap =
+                    await translateSegmentsToVietnamese(segments);
+                  const translatedSegments = segments.map((segment) => ({
+                    ...segment,
+                    text:
+                      translatedMap.get(segment.id) ?? segment.text ?? "",
+                  }));
+                  const srtContent = segmentsToSrt(translatedSegments);
+
+                  if (!isMountedRef.current) return;
+
+                  setJobs((prev) =>
+                    prev.map((item, idx) =>
+                      idx === jobIndex
+                        ? {
+                            ...item,
+                            status: "done",
+                            errorMessage: null,
+                            srtContent,
+                            durationSeconds,
+                            costUsd,
+                          }
+                        : item,
+                    ),
+                  );
+                } catch (translateError) {
+                  console.error(
+                    "[batch] translate:exception",
+                    translateError,
+                  );
+                  if (!isMountedRef.current) return;
+                  setJobs((prev) =>
+                    prev.map((item, idx) =>
+                      idx === jobIndex
+                        ? {
+                            ...item,
+                            status: "error",
+                            errorMessage:
+                              translateError instanceof Error &&
+                              translateError.message
+                                ? translateError.message
+                                : "Lỗi khi dịch phụ đề.",
+                          }
+                        : item,
+                    ),
+                  );
+                }
+              } else {
+                const srtContent = segmentsToSrt(segments);
+
+                setJobs((prev) =>
+                  prev.map((item, idx) =>
+                    idx === jobIndex
+                      ? {
+                          ...item,
+                          status: "done",
+                          errorMessage: null,
+                          srtContent,
+                          durationSeconds,
+                          costUsd,
+                        }
+                      : item,
+                  ),
+                );
+              }
             }
           } catch (error: unknown) {
             if (!isMountedRef.current) return;
@@ -310,7 +379,9 @@ export function BatchTranscribeCard() {
 
   const hasJobs = jobs.length > 0;
   const pendingCount = jobs.filter((job) => job.status === "pending").length;
-  const processingCount = jobs.filter((job) => job.status === "processing").length;
+  const processingCount = jobs.filter(
+    (job) => job.status === "processing" || job.status === "translating",
+  ).length;
 
   return (
     <Card.Root variant="elevated" shadow="md" borderRadius="xl" overflow="hidden">
@@ -545,6 +616,7 @@ export function BatchTranscribeCard() {
                 <Table.Body>
                   {jobs.map((job, index) => {
                     const isProcessing = job.status === "processing";
+                    const isTranslating = job.status === "translating";
                     const isDone = job.status === "done";
                     const isError = job.status === "error";
                     return (
@@ -588,6 +660,14 @@ export function BatchTranscribeCard() {
                               <Spinner size="xs" />
                               <Text fontSize="xs" color="blue.600">
                                 Đang transcribe...
+                              </Text>
+                            </HStack>
+                          )}
+                          {isTranslating && (
+                            <HStack gap={2}>
+                              <Spinner size="xs" />
+                              <Text fontSize="xs" color="orange.600">
+                                Đang dịch...
                               </Text>
                             </HStack>
                           )}

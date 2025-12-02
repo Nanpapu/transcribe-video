@@ -1,7 +1,7 @@
 "use client";
 
 import { type ChangeEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Box, Container, Grid, Stack, Tabs } from "@chakra-ui/react";
+import { Box, Button, Container, Flex, Grid, HStack, Stack, Tabs, Text } from "@chakra-ui/react";
 
 import {
   formatTimecode,
@@ -12,6 +12,7 @@ import {
   type TranscriptResponse,
 } from "@/lib/transcript";
 import { DEFAULT_ASR_MODEL, type AsrModelId } from "@/lib/asr-models";
+import { translateSegmentsToVietnamese } from "@/lib/translate-client";
 import { AppHeader } from "./_components/app-header";
 import { FileUploadCard } from "./_components/file-upload-card";
 import { VideoPreviewCard } from "./_components/video-preview-card";
@@ -37,6 +38,8 @@ export default function HomePage() {
   const [actualCostUsd, setActualCostUsd] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [shouldTranslate, setShouldTranslate] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -144,7 +147,8 @@ export default function HomePage() {
         segments: data.segments?.length ?? 0,
         costUsd: data.costUsd ?? null,
       });
-      const mappedSegments: EditableSegment[] = (data.segments ?? []).map((segment) => ({
+      const baseSegments = data.segments ?? [];
+      const mappedSegments: EditableSegment[] = baseSegments.map((segment) => ({
         ...segment,
         startTimecode: formatTimecode(segment.start),
         endTimecode: formatTimecode(segment.end),
@@ -171,6 +175,33 @@ export default function HomePage() {
           ? data.costUsd
           : null,
       );
+
+      if (shouldTranslate && baseSegments.length) {
+        console.log("[ui] translate:start", {
+          segmentCount: baseSegments.length,
+        });
+        setIsTranslating(true);
+        try {
+          const translatedMap = await translateSegmentsToVietnamese(baseSegments);
+          if (translatedMap.size) {
+            setSegments((prev) =>
+              prev.map((segment) => ({
+                ...segment,
+                text: translatedMap.get(segment.id) ?? segment.text,
+              })),
+            );
+            console.log("[ui] translate:done", {
+              translatedCount: translatedMap.size,
+            });
+          } else {
+            console.warn("[ui] translate:empty-map");
+          }
+        } catch (translateError) {
+          console.error("[ui] translate:exception", translateError);
+        } finally {
+          setIsTranslating(false);
+        }
+      }
     } catch (err: unknown) {
       console.error("[ui] transcribe:exception", err);
       if (err instanceof DOMException && err.name === "AbortError") {
@@ -278,93 +309,112 @@ export default function HomePage() {
       <AppHeader />
 
       <Container maxW="7xl" mt={10} px={6}>
-        <Tabs.Root defaultValue="single" colorPalette="blue">
-          <Tabs.List
-            mb={6}
-            borderBottomWidth="1px"
-            borderColor="gray.200"
-            gap={6}
-          >
-            <Tabs.Trigger
-              value="single"
-              px={3}
-              py={2}
-              fontSize="sm"
-              fontWeight="medium"
-            >
-              Transcribe đơn lẻ
-            </Tabs.Trigger>
-            <Tabs.Trigger
-              value="batch"
-              px={3}
-              py={2}
-              fontSize="sm"
-              fontWeight="medium"
-            >
-              Transcribe nhiều file
-            </Tabs.Trigger>
-          </Tabs.List>
-
-          <Tabs.Content value="single">
-            <Grid
-              templateColumns={{ base: "1fr", lg: "1fr 1.2fr" }}
-              gap={10}
-              alignItems="start"
-            >
-              <Stack gap={8}>
-                <FileUploadCard
-                  file={file}
-                  isTranscribing={isTranscribing}
-                  inputRef={inputRef}
-                  model={model}
-                  onModelChange={setModel}
-                  language={language}
-                  onLanguageChange={setLanguage}
-                  onFileChange={handleFileChange}
-                  onClearFile={handleClearFile}
-                  onTranscribe={handleTranscribe}
-                  fileDurationSeconds={fileDuration}
-                  actualCostUsd={actualCostUsd}
-                />
-
-                <VideoPreviewCard
-                  videoUrl={videoUrl}
-                  videoRef={videoRef}
-                  subtitlePosition={subtitlePosition}
-                  onSubtitlePositionChange={setSubtitlePosition}
-                  onTimeUpdate={handleTimeUpdate}
-                  onLoadedMetadata={handleLoadedMetadata}
-                  currentSegmentText={currentSegment?.text ?? null}
-                  currentTime={currentTime}
-                  totalSegments={segments.length}
-                  activeIndex={activeIndex}
-                />
-              </Stack>
-
-              <Stack
-                gap={6}
-                alignSelf="start"
-                position={{ base: "static", lg: "sticky" }}
-                top={{ base: "0px", lg: "96px" }}
+        <Stack gap={4}>
+          <Flex justify="flex-end">
+            <HStack gap={3}>
+              <Text fontSize="sm" color="gray.700">
+                Dịch phụ đề sang tiếng Việt
+              </Text>
+              <Button
+                size="sm"
+                variant={shouldTranslate ? "solid" : "outline"}
+                colorPalette="blue"
+                onClick={() => setShouldTranslate((prev) => !prev)}
               >
-                <SubtitleEditorCard
-                  segments={segments}
-                  error={error}
-                  activeIndex={activeIndex}
-                  onDownloadSrt={handleDownloadSrt}
-                  onTimeChange={handleTimeChange}
-                  onTimeBlur={handleTimeBlur}
-                  onTextChange={handleTextChange}
-                  onSeekToSegment={handleSeekToSegment}
-                />
-              </Stack>
-            </Grid>
-          </Tabs.Content>
+                {shouldTranslate ? "Đang bật" : "Đang tắt"}
+              </Button>
+            </HStack>
+          </Flex>
 
-          <Tabs.Content value="batch">
-            <BatchTranscribeCard />
-          </Tabs.Content>
-        </Tabs.Root>
+          <Tabs.Root defaultValue="single" colorPalette="blue">
+            <Tabs.List
+              mb={6}
+              borderBottomWidth="1px"
+              borderColor="gray.200"
+              gap={6}
+            >
+              <Tabs.Trigger
+                value="single"
+                px={3}
+                py={2}
+                fontSize="sm"
+                fontWeight="medium"
+              >
+                Transcribe đơn lẻ
+              </Tabs.Trigger>
+              <Tabs.Trigger
+                value="batch"
+                px={3}
+                py={2}
+                fontSize="sm"
+                fontWeight="medium"
+              >
+                Transcribe nhiều file
+              </Tabs.Trigger>
+            </Tabs.List>
+
+            <Tabs.Content value="single">
+              <Grid
+                templateColumns={{ base: "1fr", lg: "1fr 1.2fr" }}
+                gap={10}
+                alignItems="start"
+              >
+                <Stack gap={8}>
+                  <FileUploadCard
+                    file={file}
+                    isTranscribing={isTranscribing}
+                    inputRef={inputRef}
+                    model={model}
+                    onModelChange={setModel}
+                    language={language}
+                    onLanguageChange={setLanguage}
+                    onFileChange={handleFileChange}
+                    onClearFile={handleClearFile}
+                    onTranscribe={handleTranscribe}
+                    fileDurationSeconds={fileDuration}
+                    actualCostUsd={actualCostUsd}
+                  />
+
+                  <VideoPreviewCard
+                    videoUrl={videoUrl}
+                    videoRef={videoRef}
+                    subtitlePosition={subtitlePosition}
+                    onSubtitlePositionChange={setSubtitlePosition}
+                    onTimeUpdate={handleTimeUpdate}
+                    onLoadedMetadata={handleLoadedMetadata}
+                    currentSegmentText={currentSegment?.text ?? null}
+                    currentTime={currentTime}
+                    totalSegments={segments.length}
+                    activeIndex={activeIndex}
+                  />
+                </Stack>
+
+                <Stack
+                  gap={6}
+                  alignSelf="start"
+                  position={{ base: "static", lg: "sticky" }}
+                  top={{ base: "0px", lg: "96px" }}
+                >
+                  <SubtitleEditorCard
+                    segments={segments}
+                    error={error}
+                    activeIndex={activeIndex}
+                    onDownloadSrt={handleDownloadSrt}
+                    onTimeChange={handleTimeChange}
+                    onTimeBlur={handleTimeBlur}
+                    onTextChange={handleTextChange}
+                    onSeekToSegment={handleSeekToSegment}
+                    isTranslating={isTranslating}
+                  />
+                </Stack>
+              </Grid>
+            </Tabs.Content>
+
+            <Tabs.Content value="batch">
+              <BatchTranscribeCard translateEnabled={shouldTranslate} />
+            </Tabs.Content>
+          </Tabs.Root>
+        </Stack>
       </Container>
     </Box>
   );

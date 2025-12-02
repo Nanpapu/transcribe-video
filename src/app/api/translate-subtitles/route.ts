@@ -1,0 +1,211 @@
+import { NextResponse } from "next/server";
+import { GoogleGenAI } from "@google/genai";
+
+import type { TranscriptSegment } from "@/lib/transcript";
+import { parseAIResponse } from "@/lib/ai-json";
+
+type TranslateItem = {
+  i: number;
+  t: string;
+};
+
+type TranslateRequestBody = {
+  items: TranslateItem[];
+  targetLanguage?: string | null;
+};
+
+type TranslateResponseBody = {
+  items: TranslateItem[];
+};
+
+function getEnv(key: string): string | null {
+  const value = process.env[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function normalizeItemsFromSegments(segments: TranscriptSegment[]): TranslateItem[] {
+  return segments.map((segment) => ({
+    i: segment.id,
+    t: segment.text ?? "",
+  }));
+}
+
+async function callGeminiWithRetry(payload: TranslateRequestBody): Promise<TranslateItem[]> {
+  const apiKey = getEnv("GEMINI_API_KEY");
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured.");
+  }
+
+  const client = new GoogleGenAI({
+    apiKey,
+  });
+
+  const modelId = getEnv("GEMINI_MODEL_ID") ?? "gemini-2.0-flash-exp";
+
+  const inputJson = JSON.stringify(payload.items);
+
+  const prompt = [
+    "You are a professional subtitle translator.",
+    "Translate each subtitle line into Vietnamese.",
+    'Input is a JSON array of objects with keys "i" (the original subtitle index) and "t" (the original subtitle text).',
+    'Output must be valid JSON only, no extra text. Use exactly the same structure: an array of objects with keys "i" and "t".',
+    'Keep the same "i" values. Replace "t" with the translated Vietnamese text.',
+    "Do not add timestamps, formatting hints, explanations, or any additional fields.",
+    "",
+    "Input JSON:",
+    inputJson,
+  ].join("\n");
+
+  const contents = [
+    {
+      role: "user",
+      parts: [
+        {
+          text: prompt,
+        },
+      ],
+    },
+  ];
+
+  const maxAttempts = 10;
+
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const response = await client.models.generateContentStream({
+        model: modelId,
+        config: {
+          thinkingConfig: {
+            thinkingBudget: 256,
+          },
+        },
+        contents,
+      });
+
+      let fullText = "";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for await (const chunk of response as any) {
+        const text = typeof chunk?.text === "string" ? chunk.text : "";
+        if (text) fullText += text;
+      }
+
+      const parsed = parseAIResponse(fullText) as unknown;
+
+      if (!parsed || !Array.isArray(parsed)) {
+        throw new Error("AI response is not an array.");
+      }
+
+      const items: TranslateItem[] = parsed
+        .map((raw) => {
+          if (!raw || typeof raw !== "object") return null;
+          const record = raw as Record<string, unknown>;
+          const idValue = record.i ?? record.id;
+          const textValue = record.t ?? record.text;
+          const i =
+            typeof idValue === "number"
+              ? idValue
+              : typeof idValue === "string"
+                ? Number.parseInt(idValue, 10)
+                : NaN;
+          const t = typeof textValue === "string" ? textValue.trim() : "";
+          if (!Number.isFinite(i) || !t) return null;
+          return { i, t };
+        })
+        .filter(Boolean) as TranslateItem[];
+
+      if (!items.length) {
+        throw new Error("AI response did not include any translated items.");
+      }
+
+      return items;
+    } catch (error: unknown) {
+      lastError = error;
+      const delayMs = Math.min(5000, 1000 * (attempt + 1));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+
+  throw new Error("Failed to call Gemini translate API.");
+}
+
+export async function POST(request: Request) {
+  try {
+    const raw = await request.json().catch(() => null);
+
+    if (!raw || typeof raw !== "object") {
+      return NextResponse.json(
+        { error: "Invalid request body for translate-subtitles." },
+        { status: 400 },
+      );
+    }
+
+    const body = raw as Partial<TranslateRequestBody>;
+    const items = Array.isArray(body.items) ? body.items : [];
+
+    if (!items.length) {
+      return NextResponse.json(
+        { error: "Missing items array in translate-subtitles request." },
+        { status: 400 },
+      );
+    }
+
+    const normalizedItems: TranslateItem[] = items
+      .map((entry) => {
+        const idValue = entry?.i;
+        const textValue = entry?.t;
+        const i =
+          typeof idValue === "number"
+            ? idValue
+            : typeof idValue === "string"
+              ? Number.parseInt(idValue, 10)
+              : NaN;
+        const t =
+          typeof textValue === "string"
+            ? textValue.trim()
+            : textValue == null
+              ? ""
+              : String(textValue).trim();
+        if (!Number.isFinite(i)) return null;
+        return { i, t };
+      })
+      .filter(Boolean) as TranslateItem[];
+
+    if (!normalizedItems.length) {
+      return NextResponse.json(
+        { error: "No valid items to translate." },
+        { status: 400 },
+      );
+    }
+
+    const translatedItems = await callGeminiWithRetry({
+      items: normalizedItems,
+      targetLanguage: body.targetLanguage ?? "vi",
+    });
+
+    const response: TranslateResponseBody = {
+      items: translatedItems,
+    };
+
+    return NextResponse.json(response);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : "Unexpected error while translating subtitles.";
+
+    console.error("[api/translate-subtitles] error", error);
+
+    return NextResponse.json(
+      {
+        error: message,
+      },
+      { status: 500 },
+    );
+  }
+}
+
