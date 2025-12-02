@@ -57,7 +57,7 @@ function getFormString(value: FormDataEntryValue | null): string | null {
   return trimmed.length ? trimmed : null;
 }
 
-function parseNumber(value: FormDataEntryValue | string | null): number | null {
+function parseNumber(value: FormDataEntryValue | string | number | null): number | null {
   const raw =
     typeof value === "string"
       ? value.trim()
@@ -67,6 +67,18 @@ function parseNumber(value: FormDataEntryValue | string | null): number | null {
   if (!raw) return null;
   const parsed = Number.parseFloat(raw);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function pickString(source: unknown, ...keys: string[]): string | null {
+  if (!source || typeof source !== "object") return null;
+  const record = source as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return null;
 }
 
 export async function POST(request: Request) {
@@ -163,7 +175,7 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       const rawError = await response.text().catch(() => null);
-      let parsedError: any = null;
+      let parsedError: unknown = null;
 
       if (rawError) {
         try {
@@ -174,10 +186,8 @@ export async function POST(request: Request) {
       }
 
       const message =
-        (parsedError?.error as string | undefined) ??
-        (parsedError?.detail as string | undefined) ??
-        (parsedError?.message as string | undefined) ??
-        rawError ??
+        pickString(parsedError, "error", "detail", "message") ??
+        (rawError && rawError.trim() ? rawError : null) ??
         "Failed to call DeepInfra Whisper API.";
 
       return NextResponse.json(
