@@ -1,18 +1,7 @@
 import { NextResponse } from "next/server";
 import { AutomaticSpeechRecognition } from "deepinfra";
 import type { AutomaticSpeechRecognitionRequest } from "deepinfra/dist/lib/types/automatic-speech-recognition/request";
-
-type TranscriptSegment = {
-  id: number;
-  start: number;
-  end: number;
-  text: string;
-};
-
-type TranscriptResponse = {
-  text: string;
-  segments: TranscriptSegment[];
-};
+import type { TranscriptSegment, TranscriptResponse } from "@/lib/transcript";
 
 type DeepInfraWord = {
   word?: string;
