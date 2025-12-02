@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { AutomaticSpeechRecognition } from "deepinfra";
-import type { AutomaticSpeechRecognitionRequest } from "deepinfra/dist/lib/types/automatic-speech-recognition/request";
 import type { TranscriptSegment, TranscriptResponse } from "@/lib/transcript";
 
 type DeepInfraWord = {
@@ -208,6 +206,7 @@ export async function POST(request: Request) {
     getFormString(formData.get("model")) ??
     getEnv("DEEPINFRA_WHISPER_MODEL") ??
     "openai/whisper-large-v3-turbo";
+  const supportsChunkParams = model.toLowerCase().includes("whisper");
   const file = formData.get("file");
 
   if (!file || typeof file === "string") {
@@ -253,46 +252,105 @@ export async function POST(request: Request) {
       task,
       chunkLevel,
       chunkLength,
+      supportsChunkParams,
       hasLanguage: !!language,
       hasInitialPrompt: !!initialPrompt,
       hasWebhook: !!webhook,
     });
 
-    const audioBuffer = Buffer.from(await audioFile.arrayBuffer());
-
-    type ExtendedAsrRequest = AutomaticSpeechRecognitionRequest & {
-      chunk_level?: "segment" | "word";
-      chunk_length_s?: number;
-    };
-
     const safeChunkLength = Number.isFinite(chunkLength ?? NaN)
       ? Math.min(30, Math.max(1, Math.round(chunkLength ?? 0)))
       : null;
 
-    const requestBody: ExtendedAsrRequest = {
-      audio: audioBuffer,
-      task,
-    };
+    const deepInfraForm = new FormData();
+    deepInfraForm.append("audio", audioFile, audioFile.name || "audio");
+    deepInfraForm.append("task", task);
+    if (supportsChunkParams) {
+      deepInfraForm.append("chunk_level", chunkLevel);
+    }
 
-    if (language) requestBody.language = language;
+    if (language) {
+      deepInfraForm.append("language", language);
+    }
+    if (initialPrompt) {
+      deepInfraForm.append("initial_prompt", initialPrompt);
+    }
     if (Number.isFinite(temperature ?? NaN) && typeof temperature === "number") {
-      requestBody.temperature = temperature;
+      deepInfraForm.append("temperature", `${temperature}`);
     }
-    if (initialPrompt) requestBody.initial_prompt = initialPrompt;
-    if (webhook) requestBody.webhook = webhook;
-    requestBody.chunk_level = chunkLevel;
-    if (safeChunkLength !== null) {
-      requestBody.chunk_length_s = safeChunkLength;
+    if (supportsChunkParams && safeChunkLength !== null) {
+      deepInfraForm.append("chunk_length_s", `${safeChunkLength}`);
+    }
+    if (webhook) {
+      deepInfraForm.append("webhook", webhook);
     }
 
-    const endpointModel =
-      baseUrl && /^https?:\/\//.test(baseUrl)
-        ? `${baseUrl.replace(/\/$/, "")}/${model}`
-        : model;
-    const client = new AutomaticSpeechRecognition(endpointModel, apiKey);
-    const data = (await client.generate(requestBody)) as DeepInfraWhisperResponse;
+    const resolvedBaseUrl =
+      baseUrl && /^https?:\/\//.test(baseUrl) ? baseUrl : "https://api.deepinfra.com/v1/inference";
+    const endpoint = `${resolvedBaseUrl.replace(/\/$/, "")}/${model}`;
 
-    const segmentsFromResponse = Array.isArray(data.segments) ? data.segments : [];
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `bearer ${apiKey}`,
+      },
+      body: deepInfraForm,
+    });
+
+    if (!response.ok) {
+      const rawError = await response.text().catch(() => null);
+      let parsedError: unknown = null;
+
+      if (rawError) {
+        try {
+          parsedError = JSON.parse(rawError);
+        } catch {
+          parsedError = null;
+        }
+      }
+
+      const message =
+        pickString(parsedError, "error", "detail", "message") ??
+        (rawError && rawError.trim() ? rawError : null) ??
+        "Failed to call DeepInfra Whisper API.";
+
+      console.error("[api/transcribe] deepinfra-error", {
+        status: response.status,
+        statusText: response.statusText,
+        message,
+      });
+
+      return NextResponse.json(
+        { error: message || "Failed to call DeepInfra Whisper API." },
+        { status: 502 },
+      );
+    }
+
+    const data = (await response.json()) as DeepInfraWhisperResponse;
+
+    let segmentsFromResponse: DeepInfraSegment[] = Array.isArray(data.segments)
+      ? data.segments
+      : [];
+
+    if (!segmentsFromResponse.length && typeof data.text === "string" && data.text.trim().length) {
+      const duration =
+        typeof data.duration === "number" && Number.isFinite(data.duration)
+          ? data.duration
+          : 0;
+      segmentsFromResponse = [
+        {
+          id: 0,
+          start: 0,
+          end: duration,
+          text: data.text,
+        },
+      ];
+      console.log("[api/transcribe] fallback-segments-from-text", {
+        model,
+        hasDuration: duration > 0,
+        textLength: data.text.length,
+      });
+    }
     const wordsFromSegments: DeepInfraWord[] = segmentsFromResponse.flatMap((segment) =>
       Array.isArray(segment.words) ? segment.words : [],
     );
