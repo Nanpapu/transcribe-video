@@ -13,7 +13,7 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { type ChangeEvent, useEffect, useRef } from "react";
-import { AlertCircle, Play, Type, Download } from "lucide-react";
+import { AlertCircle, Play, Type, Download, UploadCloud } from "lucide-react";
 import type { EditableTranscriptSegment } from "@/lib/transcript";
 
 type SubtitleEditorCardProps = {
@@ -26,6 +26,7 @@ type SubtitleEditorCardProps = {
   onViewModeChange?: (showOriginal: boolean) => void;
   onTranslateClick?: () => void;
   onDownloadSrt: () => void;
+  onUploadSrt: (file: File) => void;
   onTimeChange: (
     index: number,
     field: "startTimecode" | "endTimecode",
@@ -46,6 +47,7 @@ export function SubtitleEditorCard({
   onViewModeChange,
   onTranslateClick,
   onDownloadSrt,
+  onUploadSrt,
   onTimeChange,
   onTimeBlur,
   onTextChange,
@@ -53,6 +55,7 @@ export function SubtitleEditorCard({
 }: SubtitleEditorCardProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
+  const srtInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (activeIndex === null || activeIndex < 0) return;
@@ -72,6 +75,13 @@ export function SubtitleEditorCard({
     element.style.height = "auto";
     element.style.height = `${element.scrollHeight}px`;
     onTextChange(index, element.value);
+  };
+
+  const handleUploadInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) return;
+    onUploadSrt(file);
+    event.target.value = "";
   };
 
   return (
@@ -140,7 +150,16 @@ export function SubtitleEditorCard({
               onClick={onDownloadSrt}
               fontWeight="medium"
             >
-              <Download size={16} style={{ marginRight: 6 }} /> Tải file SRT
+              <Download size={16} style={{ marginRight: 6 }} /> Tải về
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              colorPalette="gray"
+              onClick={() => srtInputRef.current?.click()}
+              fontWeight="medium"
+            >
+              <UploadCloud size={16} style={{ marginRight: 6 }} /> Tải lên
             </Button>
           </HStack>
         </HStack>
@@ -154,6 +173,13 @@ export function SubtitleEditorCard({
         flexDirection="column"
         bg="white"
       >
+        <input
+          ref={srtInputRef}
+          type="file"
+          accept=".srt,text/plain"
+          style={{ display: "none" }}
+          onChange={handleUploadInputChange}
+        />
         {error && (
           <Box p={6}>
             <Alert.Root status="error" variant="subtle" borderRadius="lg">

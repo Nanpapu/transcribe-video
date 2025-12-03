@@ -7,6 +7,7 @@ import {
   formatTimecode,
   parseTimecode,
   segmentsToSrt,
+  srtToSegments,
   type SubtitlePosition,
   type EditableTranscriptSegment,
   type TranscriptResponse,
@@ -347,6 +348,35 @@ export default function HomePage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleUploadSrt = async (file: File) => {
+    try {
+      const content = await file.text();
+      const parsed = srtToSegments(content);
+      if (!parsed.length) {
+        setError("File SRT không có nội dung hợp lệ.");
+        return;
+      }
+
+      const mappedSegments: EditableSegment[] = parsed.map((segment) => ({
+        ...segment,
+        startTimecode: formatTimecode(segment.start),
+        endTimecode: formatTimecode(segment.end),
+        originalText: segment.text,
+        translatedText: null,
+      }));
+
+      setSegments(mappedSegments);
+      setActiveIndex(null);
+      setCurrentTime(0);
+      if (videoRef.current) videoRef.current.currentTime = 0;
+      setError(null);
+      setShowOriginal(false);
+    } catch (uploadError) {
+      console.error("[ui] upload-srt:exception", uploadError);
+      setError("Không thể đọc file SRT được chọn.");
+    }
+  };
+
   const handleTimeUpdate = (event: SyntheticEvent<HTMLVideoElement>) => {
     const nextTime = event.currentTarget.currentTime;
     setCurrentTime(nextTime);
@@ -472,6 +502,7 @@ export default function HomePage() {
                     error={error}
                     activeIndex={activeIndex}
                     onDownloadSrt={handleDownloadSrt}
+                    onUploadSrt={handleUploadSrt}
                     onTimeChange={handleTimeChange}
                     onTimeBlur={handleTimeBlur}
                     onTextChange={handleTextChange}

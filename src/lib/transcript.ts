@@ -77,3 +77,70 @@ export function segmentsToSrt(segments: TranscriptSegment[]): string {
     .join("\n")
     .trim();
 }
+
+export function srtToSegments(raw: string): TranscriptSegment[] {
+  if (!raw || typeof raw !== "string") return [];
+
+  const normalized = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const lines = normalized.split("\n");
+
+  const segments: TranscriptSegment[] = [];
+
+  let index = 0;
+  while (index < lines.length) {
+    let line = lines[index]?.trim() ?? "";
+    if (!line) {
+      index += 1;
+      continue;
+    }
+
+    const maybeNumber = Number.parseInt(line, 10);
+    if (Number.isFinite(maybeNumber)) {
+      index += 1;
+      if (index >= lines.length) break;
+      line = lines[index]?.trim() ?? "";
+    }
+
+    const timeMatch =
+      line.match(
+        /^(\d{2}:\d{2}:\d{2}[,.\d]*)\s*-->\s*(\d{2}:\d{2}:\d{2}[,.\d]*)/,
+      ) ?? null;
+    if (!timeMatch) {
+      while (index < lines.length && lines[index]?.trim()) {
+        index += 1;
+      }
+      continue;
+    }
+
+    const startSeconds = parseTimecode(timeMatch[1] ?? "");
+    const endSeconds = parseTimecode(timeMatch[2] ?? "");
+
+    index += 1;
+    const textLines: string[] = [];
+
+    while (index < lines.length && lines[index]?.trim()) {
+      textLines.push(lines[index] ?? "");
+      index += 1;
+    }
+
+    const text = textLines.join("\n").trim();
+    if (!text) {
+      index += 1;
+      continue;
+    }
+
+    const start = startSeconds ?? 0;
+    const end = endSeconds ?? start;
+
+    segments.push({
+      id: segments.length + 1,
+      start,
+      end,
+      text,
+    });
+
+    index += 1;
+  }
+
+  return segments;
+}
