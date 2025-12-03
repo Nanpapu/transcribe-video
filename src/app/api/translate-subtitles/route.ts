@@ -40,12 +40,12 @@ async function callGeminiWithRetry(payload: TranslateRequestBody): Promise<Trans
     apiKey,
   });
 
-  const modelId = getEnv("GEMINI_MODEL_ID") ?? "gemini-2.5-flash";
+  const modelId = getEnv("GEMINI_MODEL_ID") ?? "gemini-2.5-pro";
 
   const inputJson = JSON.stringify(payload.items);
 
   const prompt = [
-    "You are a professional subtitle translator.",
+    "You are a professional youtube short video subtitle translator. Dịch hay, cẩn thận, ngắn gọn và không tối nghĩa",
     "Translate each subtitle line into Vietnamese.",
     'Input is a JSON array of objects with keys "i" (the original subtitle index) and "t" (the original subtitle text).',
     'Output must be valid JSON only, no extra text. Use exactly the same structure: an array of objects with keys "i" and "t".',

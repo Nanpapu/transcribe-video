@@ -27,7 +27,7 @@ type BatchJobStatus = "pending" | "processing" | "translating" | "done" | "error
 
 type BatchJob = {
   id: string;
-  file: File;
+  file: File | null;
   name: string;
   sizeBytes: number;
   status: BatchJobStatus;
@@ -123,7 +123,9 @@ export function BatchTranscribeCard({ translateEnabled }: BatchTranscribeCardPro
     const files = Array.from(fileList);
     setJobs((prev) => {
       const existingKeys = new Set(
-        prev.map((job) => `${job.name}-${job.sizeBytes}-${job.file.lastModified}`),
+        prev.map((job) =>
+          job.file ? `${job.name}-${job.sizeBytes}-${job.file.lastModified}` : job.id,
+        ),
       );
       const next = [...prev];
 
@@ -168,7 +170,7 @@ export function BatchTranscribeCard({ translateEnabled }: BatchTranscribeCardPro
     const runAll = async () => {
       const tasks = pendingIndexes.map((jobIndex, order) => {
         const job = snapshotJobs[jobIndex];
-        if (!job || job.status !== "pending") {
+        if (!job || job.status !== "pending" || !job.file) {
           return Promise.resolve();
         }
 
@@ -192,7 +194,11 @@ export function BatchTranscribeCard({ translateEnabled }: BatchTranscribeCardPro
 
           try {
             const formData = new FormData();
-            formData.append("file", job.file);
+            const fileToSend = job.file;
+            if (!fileToSend) {
+              return;
+            }
+            formData.append("file", fileToSend);
             formData.append("model", modelSnapshot);
             if (languageSnapshot && languageSnapshot !== "auto") {
               formData.append("language", languageSnapshot);
@@ -212,7 +218,7 @@ export function BatchTranscribeCard({ translateEnabled }: BatchTranscribeCardPro
               setJobs((prev) =>
                 prev.map((item, idx) =>
                   idx === jobIndex
-                    ? { ...item, status: "error", errorMessage: message }
+                    ? { ...item, status: "error", errorMessage: message, file: null }
                     : item,
                 ),
               );
@@ -270,6 +276,7 @@ export function BatchTranscribeCard({ translateEnabled }: BatchTranscribeCardPro
                             srtContent,
                             durationSeconds,
                             costUsd,
+                            file: null,
                           }
                         : item,
                     ),
@@ -291,6 +298,7 @@ export function BatchTranscribeCard({ translateEnabled }: BatchTranscribeCardPro
                               translateError.message
                                 ? translateError.message
                                 : "Lỗi khi dịch phụ đề.",
+                            file: null,
                           }
                         : item,
                     ),
@@ -309,6 +317,7 @@ export function BatchTranscribeCard({ translateEnabled }: BatchTranscribeCardPro
                           srtContent,
                           durationSeconds,
                           costUsd,
+                          file: null,
                         }
                       : item,
                   ),
@@ -324,7 +333,7 @@ export function BatchTranscribeCard({ translateEnabled }: BatchTranscribeCardPro
             setJobs((prev) =>
               prev.map((item, idx) =>
                 idx === jobIndex
-                  ? { ...item, status: "error", errorMessage: message }
+                  ? { ...item, status: "error", errorMessage: message, file: null }
                   : item,
               ),
             );

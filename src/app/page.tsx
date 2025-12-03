@@ -42,7 +42,7 @@ export default function HomePage() {
   const [actualCostUsd, setActualCostUsd] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [shouldTranslate, setShouldTranslate] = useState(false);
+  const [shouldTranslate, setShouldTranslate] = useState(true);
   const [isTranslating, setIsTranslating] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
 
