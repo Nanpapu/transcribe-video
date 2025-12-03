@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 
-import type { TranscriptSegment } from "@/lib/transcript";
 import { parseAIResponse } from "@/lib/ai-json";
 
 type TranslateItem = {
   i: number;
   t: string;
+  s?: number;
+  e?: number;
 };
 
 type TranslateRequestBody = {
@@ -21,13 +22,6 @@ type TranslateResponseBody = {
 function getEnv(key: string): string | null {
   const value = process.env[key];
   return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function normalizeItemsFromSegments(segments: TranscriptSegment[]): TranslateItem[] {
-  return segments.map((segment) => ({
-    i: segment.id,
-    t: segment.text ?? "",
-  }));
 }
 
 async function callGeminiWithRetry(payload: TranslateRequestBody): Promise<TranslateItem[]> {
@@ -45,12 +39,14 @@ async function callGeminiWithRetry(payload: TranslateRequestBody): Promise<Trans
   const inputJson = JSON.stringify(payload.items);
 
   const prompt = [
-    "You are a professional youtube short video subtitle translator. Dịch hay, cẩn thận, ngắn gọn và không tối nghĩa",
+    "You are a professional YouTube short video subtitle translator.",
+    "Dịch hay, cẩn thận, ngắn gọn và tự nhiên như người Việt, không tối nghĩa. Có thể đảo trật tự câu cho hợp tiếng Việt.",
     "Translate each subtitle line into Vietnamese.",
-    'Input is a JSON array of objects with keys "i" (the original subtitle index) and "t" (the original subtitle text).',
-    'Output must be valid JSON only, no extra text. Use exactly the same structure: an array of objects with keys "i" and "t".',
+    'Input is a JSON array of objects. Each object has: "i" (subtitle index), "t" (original subtitle text), "s" (start time in seconds), "e" (end time in seconds).',
+    "Một câu thoại có thể bị cắt thành nhiều line phụ đề (nhiều object liên tiếp có timestamp gần nhau). Hãy dùng timestamp s/e để hiểu ngữ cảnh nhưng đừng gộp nhiều line thành một.",
+    'Output must be valid JSON only, no extra text. Use exactly the structure: an array of objects with keys "i" and "t".',
     'Keep the same "i" values. Replace "t" with the translated Vietnamese text.',
-    "Do not add timestamps, formatting hints, explanations, or any additional fields.",
+    "Không tự ý thêm key khác (không thêm s, e, timestamp, comment, hay metadata). Không thêm giải thích trước hoặc sau JSON.",
     "",
     "Input JSON:",
     inputJson,
@@ -77,7 +73,7 @@ async function callGeminiWithRetry(payload: TranslateRequestBody): Promise<Trans
         model: modelId,
           config: {
           thinkingConfig: {
-            thinkingBudget: 512,
+            thinkingBudget: 5120,
           },
         },
         contents,
@@ -168,6 +164,8 @@ export async function POST(request: Request) {
       .map((entry) => {
         const idValue = entry?.i;
         const textValue = entry?.t;
+        const startValue = entry?.s;
+        const endValue = entry?.e;
         const i =
           typeof idValue === "number"
             ? idValue
@@ -180,8 +178,16 @@ export async function POST(request: Request) {
             : textValue == null
               ? ""
               : String(textValue).trim();
+        const s =
+          typeof startValue === "number" && Number.isFinite(startValue)
+            ? startValue
+            : undefined;
+        const e =
+          typeof endValue === "number" && Number.isFinite(endValue)
+            ? endValue
+            : undefined;
         if (!Number.isFinite(i)) return null;
-        return { i, t };
+        return { i, t, s, e };
       })
       .filter(Boolean) as TranslateItem[];
 

@@ -3,6 +3,8 @@ import type { TranscriptSegment } from "./transcript";
 type TranslateItem = {
   i: number;
   t: string;
+  s?: number;
+  e?: number;
 };
 
 type TranslateResponseBody = {
@@ -19,6 +21,8 @@ export async function translateSegmentsToVietnamese(
   const items: TranslateItem[] = segments.map((segment) => ({
     i: segment.id,
     t: segment.text ?? "",
+    s: segment.start,
+    e: segment.end,
   }));
 
   const response = await fetch("/api/translate-subtitles", {
@@ -60,4 +64,3 @@ export async function translateSegmentsToVietnamese(
 
   return result;
 }
-

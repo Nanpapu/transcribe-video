@@ -167,7 +167,7 @@ export default function HomePage() {
       const timeoutId = window.setTimeout(() => {
         console.warn("[ui] transcribe:abort-timeout");
         controller.abort();
-      }, 120000);
+      }, 12000000);
 
       const body = new FormData();
       body.append("file", file);
